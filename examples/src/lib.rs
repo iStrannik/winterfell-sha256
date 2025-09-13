@@ -10,6 +10,7 @@ use winterfell::{
     BatchingMethod, FieldExtension, Proof, ProofOptions, VerifierError,
 };
 
+pub mod experiment_sha;
 pub mod fibonacci;
 #[cfg(feature = "std")]
 pub mod lamport;
@@ -213,6 +214,11 @@ pub enum ExampleType {
         /// Number of signers; must be one less than a power of two
         #[structopt(short = "n", default_value = "3")]
         num_signers: usize,
+    },
+    ExperimentSha {
+        /// Length of Fibonacci sequence; must be a power of two
+        #[structopt(short = "n", default_value = "1048576")]
+        sequence_length: usize,
     },
 }
 

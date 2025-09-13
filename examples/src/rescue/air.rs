@@ -64,7 +64,7 @@ impl Air for RescueAir {
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
         let degrees = vec![
-            TransitionConstraintDegree::with_cycles(3, vec![CYCLE_LENGTH]),
+            TransitionConstraintDegree::with_cycles(1, vec![CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![CYCLE_LENGTH]),
             TransitionConstraintDegree::with_cycles(3, vec![CYCLE_LENGTH]),

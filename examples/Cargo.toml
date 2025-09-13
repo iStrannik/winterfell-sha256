@@ -26,10 +26,12 @@ default = ["std"]
 std = ["core-utils/std", "hex/std", "rand-utils", "winterfell/std"]
 
 [dependencies]
+base16ct = "0.2.0"
 blake3 = { version = "1.8", default-features = false }
 core-utils = { version = "0.13", path = "../utils/core", package = "winter-utils", default-features = false }
 hex = { version = "0.4", optional = true }
 rand-utils = { version = "0.13", path = "../utils/rand", package = "winter-rand-utils", optional = true }
+sha2 = "=0.10.8"
 structopt = { version = "0.3", default-features = false }
 tracing = { version = "0.1", default-features = false }
 tracing-forest = { version = "0.1", features = ["ansi", "smallvec"], optional = true }
