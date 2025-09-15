@@ -83,8 +83,8 @@ fn main() {
             lamport::threshold::get_example(&options, num_signers)
         },
         #[cfg(feature = "std")]
-        ExampleType::ExperimentSha { sequence_length } => {
-            experiment_sha::get_example(&options, sequence_length)
+        ExampleType::ExperimentSha { string_length } => {
+            experiment_sha::get_example(&options, string_length)
         },
     }
     .expect("The example failed to initialize.");

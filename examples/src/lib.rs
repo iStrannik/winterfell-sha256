@@ -215,10 +215,11 @@ pub enum ExampleType {
         #[structopt(short = "n", default_value = "3")]
         num_signers: usize,
     },
+    // Compute a SHA256 hash of a string
     ExperimentSha {
-        /// Length of Fibonacci sequence; must be a power of two
-        #[structopt(short = "n", default_value = "1048576")]
-        sequence_length: usize,
+        /// Length of string; number of blocks after padding must be power of two
+        #[structopt(short = "n", default_value = "1000")]
+        string_length: usize,
     },
 }
 

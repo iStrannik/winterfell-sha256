@@ -117,6 +117,48 @@ where:
 
 This example also illustrates how an execution trace can be built using multiple threads.
 
+### SHA-256 Experiment
+This example demonstrates a custom virtual machine implementation for SHA-256 hash computation using STARK proofs. The example implements a bitwise virtual machine with various operations and uses it to compute SHA-256 hashes in a verifiable manner.
+
+#### Features
+- **Custom VM Commands**: Implements bitwise operations (XOR, AND, OR, NOT, ROR, SHR, ADD) and memory operations
+- **SHA-256 Implementation**: Computes SHA-256 hash using the custom VM instruction set
+- **STARK Verification**: All computations are verifiable using STARK proofs
+- **Bit-level Operations**: All operations work at the bit level
+
+#### Available Commands
+- `ToBin` / `ToBin2`: Convert values to bit representation in B1/B2 registers
+- `FromBin`: Convert bit representation back to values
+- `XOR`, `AND`, `OR`, `NOT`: Bitwise logical operations
+- `ROR`, `SHR`: Bit rotation and shift operations
+- `ADD`: 32-bit modular addition
+- `SetB2`: Set B2 register to a specific value
+- `ResetHardMemory`: Disable copy constraints for hard memory
+- `NOP`: No operation
+
+#### Usage
+You can run the example like so:
+```
+./target/release/winterfell [FLAGS] [OPTIONS] experiment-sha [string length]
+```
+where:
+
+* **string length** is the length of string. Length of string; number of blocks after padding must be power of two.
+
+For example, the following command will generate and verify a proof for computing SHA-256 hash:
+```
+./target/release/winterfell experiment-sha -n 1000
+```
+
+#### Technical Details
+- **Trace Width**: 152 columns (64 for hard memory, 8 for IV, 16 for registers, 64 for bit registers)
+- **Program Length**: 8192 steps (configurable)
+- **Memory Layout**:
+  - Columns 0-63: Hard memory (input data)
+  - Columns 64-71: Initial values (IV)
+  - Columns 72-87: Registers (temporary variables)
+  - Columns 88-151: Bit registers (B1 and B2, 32 bits each)
+
 License
 -------
 

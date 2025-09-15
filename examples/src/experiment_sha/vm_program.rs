@@ -312,6 +312,25 @@ impl Command for NOP {
     }
 }
 
+pub struct ResetHardMemory;
+
+impl Command for ResetHardMemory {
+    fn num() -> BaseElement {
+        BaseElement::new(12)
+    }
+    
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &[E], _: &[E], _: usize, _: &[E]) -> E {
+        // ResetHardMemory отключает ограничения копирования для hard memory
+        // Не накладывает никаких ограничений - hard memory может изменяться свободно
+        E::ZERO
+    }
+    
+    fn prove(_: &mut [BaseElement], _: usize) {
+        // ResetHardMemory отключает ограничения копирования для hard memory
+        // Не изменяет состояние - hard memory может изменяться свободно
+    }
+}
+
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
     0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -347,6 +366,7 @@ fn sample_program() -> Vec<[BaseElement; 2]> {
         [SetB2::num(), BaseElement::new(155)],
         [NOP::num(), BaseElement::new(0)],
         [FromBin::num(), BaseElement::new(80)],
+        [ResetHardMemory::num(), BaseElement::new(0)],
     ]
 }
 
@@ -588,12 +608,14 @@ fn hash_one_round(i: usize) -> Vec<[BaseElement; 2]> {
 pub fn get_program() -> Vec<[BaseElement; 2]> {
     let mut program = Vec::new();
     program.extend(vec![[NOP::num(), BaseElement::new(0)]; 2]);
-    // program.extend(sample_program());
+    program.extend(sample_program());
     program.extend(create_tmp_iv());
     for i in 0..64 {
         program.extend(hash_one_round(i));
     }
     program.extend(update_h());
-    program.extend(vec![[NOP::num(), BaseElement::new(0)]; program.len().next_power_of_two() - program.len()]);
+    // Добавляем команду ResetHardMemory для тестирования
+    // Эта команда отключает ограничения копирования для hard memory
+    program.extend(vec![[ResetHardMemory::num(), BaseElement::new(0)]; program.len().next_power_of_two() - program.len()]);
     program
 }

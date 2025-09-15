@@ -12,7 +12,7 @@ use winterfell::{
     Proof, ProofOptions, Prover, Trace, VerifierError,
 };
 
-use crate::{experiment_sha::{air::PublicInputs, table::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block, string_to_elements}}, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
+use crate::{experiment_sha::{air::PublicInputs, table::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block}}, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
 
 mod air;
 mod assertions;
@@ -158,19 +158,19 @@ pub fn custom_sha256(message: &[u8]) -> [u8; 32] {
 
 pub fn get_example(
     options: &ExampleOptions,
-    sequence_length: usize,
+    string_length: usize,
 ) -> Result<Box<dyn Example>, String> {
     let (options, hash_fn) = options.to_proof_options(28, 8);
 
     match hash_fn {
         HashFunction::Blake3_192 => {
-            Ok(Box::new(ExperimentShaExample::<Blake3_192>::new(sequence_length, options)))
+            Ok(Box::new(ExperimentShaExample::<Blake3_192>::new(string_length, options)))
         },
         HashFunction::Blake3_256 => {
-            Ok(Box::new(ExperimentShaExample::<Blake3_256>::new(sequence_length, options)))
+            Ok(Box::new(ExperimentShaExample::<Blake3_256>::new(string_length, options)))
         },
         HashFunction::Sha3_256 => {
-            Ok(Box::new(ExperimentShaExample::<Sha3_256>::new(sequence_length, options)))
+            Ok(Box::new(ExperimentShaExample::<Sha3_256>::new(string_length, options)))
         },
         _ => Err("The specified hash function cannot be used with this example.".to_string()),
     }
@@ -178,17 +178,26 @@ pub fn get_example(
 
 pub struct ExperimentShaExample<H: ElementHasher> {
     options: ProofOptions,
-    sequence_length: usize,
-    input_data: Vec<BaseElement>,
+    input_data: Vec<[BaseElement; 16]>,
     result: Vec<BaseElement>,
     _hasher: PhantomData<H>,
 }
 
 impl<H: ElementHasher> ExperimentShaExample<H> {
-    pub fn new(sequence_length: usize, options: ProofOptions) -> Self {
-        assert!(sequence_length.is_power_of_two(), "sequence length must be a power of 2");
-        let input_string = "abcdefghQQQQ".to_string();
-        let input_data = prepare_sha_256_block(&input_string);
+    pub fn new(string_length: usize, options: ProofOptions) -> Self {
+        let input_string = "a".repeat(string_length).to_string();
+        let input_data = prepare_sha_256_block(&input_string)
+            .chunks(16)
+            .map(|chunk| {
+                let arr: [BaseElement; 16] = chunk
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<BaseElement>>()
+                    .try_into()
+                    .expect("Chunk should have exactly 16 elements");
+                arr
+            })
+            .collect::<Vec<[BaseElement; 16]>>();
         use sha2::{Sha256, Digest};
         let mut hasher = Sha256::new();
         hasher.update(input_string.as_bytes());
@@ -197,7 +206,6 @@ impl<H: ElementHasher> ExperimentShaExample<H> {
         // println!("custom_sha256(input_string) = {}", hex::encode(custom_sha256(input_string.as_bytes())));
         ExperimentShaExample {
             options,
-            sequence_length,
             input_data,
             result: bytes_to_elements(hash_result.as_slice()),
             _hasher: PhantomData,
@@ -213,11 +221,6 @@ where
     H: ElementHasher<BaseField = BaseElement> + Sync,
 {
     fn prove(&self) -> Proof {
-        println!(
-            "Generating proof for computing sequence (2 terms per step) up to {}th term",
-            self.sequence_length
-        );
-
         // create a prover
         let prover = ExperimentShaProver::<H>::new(self.options.clone());
 
@@ -225,7 +228,7 @@ where
         let trace =
             info_span!("generate_execution_trace", num_cols = TABLE_WIDTH, steps = field::Empty)
                 .in_scope(|| {
-                    let trace = prover.build_trace(self.sequence_length, PublicInputs { data: self.input_data.clone(), result: self.result.clone() } );
+                    let trace = prover.build_trace( PublicInputs { data: self.input_data.clone(), result: self.result.clone() } );
                     tracing::Span::current().record("steps", trace.length());
                     trace
                 });
@@ -248,9 +251,23 @@ where
     fn verify_with_wrong_inputs(&self, proof: Proof) -> Result<(), VerifierError> {
         let acceptable_options =
             winterfell::AcceptableOptions::OptionSet(vec![proof.options().clone()]);
+        let input_string = "WRONG".to_string();
+        let input_data = prepare_sha_256_block(&input_string)
+            .chunks(16)
+            .map(|chunk| {
+                let arr: [BaseElement; 16] = chunk
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<BaseElement>>()
+                    .try_into()
+                    .expect("Chunk should have exactly 16 elements");
+                arr
+            })
+            .collect::<Vec<[BaseElement; 16]>>();
+
         winterfell::verify::<ExperimentShaAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
             proof,
-            PublicInputs { data: string_to_elements(&"b".repeat(64)), result: self.result.clone() },
+            PublicInputs { data: input_data, result: self.result.clone() },
             &acceptable_options,
         )
     }

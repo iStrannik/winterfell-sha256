@@ -7,7 +7,7 @@ use winterfell::{
     crypto::MerkleTree, matrix::ColMatrix, AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable
 };
 
-use crate::experiment_sha::{air::PublicInputs, table::{set_iv, INPUT_BASE_ELEMENTS, IV_INDICES}, utis::{element_to_u32, extend_sha256_block, extract_hash, get_iv}, vm_program::{get_program, Command, FromBin, SetB2, ToBin, ToBin2, ADD, AND, NOP, NOT, OR, ROR, SHR, XOR}};
+use crate::experiment_sha::{air::PublicInputs, table::{set_iv, INPUT_BASE_ELEMENTS, IV_INDICES}, utis::{element_to_u32, extend_sha256_block, extract_hash, get_iv}, vm_program::{get_program, Command, FromBin, SetB2, ToBin, ToBin2, ADD, AND, NOP, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR, ResetHardMemory}};
 use crate::experiment_sha::table::TABLE_WIDTH;
 
 use super::{
@@ -31,18 +31,19 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
     }
 
     /// Builds an execution trace for computing a sequence of the specified length
-    pub fn build_trace(&self, _: usize, input_data: PublicInputs) -> TraceTable<BaseElement> {
+    pub fn build_trace(&self, input_data: PublicInputs) -> TraceTable<BaseElement> {
         let program = get_program();
-
-        let mut trace = TraceTable::new(TABLE_WIDTH, program.len());
+        assert_eq!(input_data.result.len(), 8);
+        println!("input_data.data.len() = {}", input_data.data.len());
+        let mut trace = TraceTable::new(TABLE_WIDTH, program.len() * input_data.data.len());
         trace.fill(
             |state| {
-                let d = extend_sha256_block(input_data.data.clone());
-
+                let d = extend_sha256_block(input_data.data[0].to_vec());
                 for i in 0..d.len() {
                     state[i] = d[i];
                 }
                 set_iv(state, get_iv());
+
                 
                 // println!("initial w");
                 // println!("{:?}", state[0..64].iter().map(|x| format!("{:x}", element_to_u32(*x))).collect::<Vec<String>>().join(" "));
@@ -51,43 +52,52 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
                 // println!("{:?}", state[64..72].iter().map(|x| format!("{:x}", element_to_u32(*x))).collect::<Vec<String>>().join(" "));
             },
             |step: usize, state: &mut [BaseElement]| {
-                let command = program[step % program.len()][0];
-                let b1 = program[step % program.len()][1];
-                if ToBin::num() == command {
-                    ToBin::prove(state, element_to_u32(b1) as usize);
-                } else if ToBin2::num() == command {
-                    ToBin2::prove(state, element_to_u32(b1) as usize);
-                } else if FromBin::num() == command {
-                    FromBin::prove(state, element_to_u32(b1) as usize);
-                    /*
-                    if b1 == BaseElement::new(79) {
-                        println!("after copying h");
-                        println!("{:?}", state[72..80].iter().map(|x| format!("{:x}", element_to_u32(*x))).collect::<Vec<String>>().join(" "));
+                if step % program.len() == program.len() - 1 {
+                    let d = extend_sha256_block(input_data.data[(step + 1) / program.len()].to_vec());
+                    for i in 0..d.len() {
+                        state[i] = d[i];
                     }
-                    */
-                } else if XOR::num() == command {
-                    XOR::prove(state, element_to_u32(b1) as usize);
-                } else if AND::num() == command {
-                    AND::prove(state, element_to_u32(b1) as usize);
-                } else if OR::num() == command {
-                    OR::prove(state, element_to_u32(b1) as usize);
-                } else if NOT::num() == command {
-                    NOT::prove(state, element_to_u32(b1) as usize);
-                } else if ROR::num() == command {
-                    ROR::prove(state, element_to_u32(b1) as usize);
-                } else if SHR::num() == command {
-                    SHR::prove(state, element_to_u32(b1) as usize);
-                } else if ADD::num() == command {
-                    ADD::prove(state, element_to_u32(b1) as usize);
-                } else if SetB2::num() == command {
-                    SetB2::prove(state, element_to_u32(b1) as usize);
-                } else if NOP::num() == command {
-                    NOP::prove(state, element_to_u32(b1) as usize);
                 } else {
-                    todo!();
-                }
-                if step == program.len() - 2 {
-                    println!("Proof result is sha256(input_string) = {}", hex::encode(extract_hash(state)));
+                    let command = program[step % program.len()][0];
+                    let b1 = program[step % program.len()][1];
+                    if ToBin::num() == command {
+                        ToBin::prove(state, element_to_u32(b1) as usize);
+                    } else if ToBin2::num() == command {
+                        ToBin2::prove(state, element_to_u32(b1) as usize);
+                    } else if FromBin::num() == command {
+                        FromBin::prove(state, element_to_u32(b1) as usize);
+                        /*
+                        if b1 == BaseElement::new(79) {
+                            println!("after copying h");
+                            println!("{:?}", state[72..80].iter().map(|x| format!("{:x}", element_to_u32(*x))).collect::<Vec<String>>().join(" "));
+                        }
+                        */
+                    } else if XOR::num() == command {
+                        XOR::prove(state, element_to_u32(b1) as usize);
+                    } else if AND::num() == command {
+                        AND::prove(state, element_to_u32(b1) as usize);
+                    } else if OR::num() == command {
+                        OR::prove(state, element_to_u32(b1) as usize);
+                    } else if NOT::num() == command {
+                        NOT::prove(state, element_to_u32(b1) as usize);
+                    } else if ROR::num() == command {
+                        ROR::prove(state, element_to_u32(b1) as usize);
+                    } else if SHR::num() == command {
+                        SHR::prove(state, element_to_u32(b1) as usize);
+                    } else if ADD::num() == command {
+                        ADD::prove(state, element_to_u32(b1) as usize);
+                    } else if SetB2::num() == command {
+                        SetB2::prove(state, element_to_u32(b1) as usize);
+                    } else if NOP::num() == command {
+                        NOP::prove(state, element_to_u32(b1) as usize);
+                    } else if ResetHardMemory::num() == command {
+                        ResetHardMemory::prove(state, element_to_u32(b1) as usize);
+                    } else {
+                        todo!();
+                    }
+                    if step == program.len() * input_data.data.len() - 2 {
+                        println!("Proof result is sha256(input_string) = {}", hex::encode(extract_hash(state)));
+                    }
                 }
             }
         );
@@ -114,14 +124,17 @@ where
         DefaultConstraintEvaluator<'a, Self::Air, E>;
 
     fn get_pub_inputs(&self, trace: &Self::Trace) -> PublicInputs {
-        let mut input_data_elements = Vec::new();
-        for i in 0..INPUT_BASE_ELEMENTS {
-            input_data_elements.push(trace.get(i, 0));
+        let mut input_data_elements: Vec<[BaseElement; 16]> = vec![[BaseElement::new(0); 16]; trace.length() / PROGRAM_LEN];
+        for j in 0..trace.length() / PROGRAM_LEN {
+            for i in 0..INPUT_BASE_ELEMENTS {
+                input_data_elements[j][i] = trace.get(i, j * PROGRAM_LEN);
+            }
         }
         let mut result_elements = Vec::new();
         for i in 0..8 {
             result_elements.push(trace.get(IV_INDICES[i], trace.length() - 1));
         }
+        // println!("input_data_elements: {:?}", input_data_elements[0]);
         PublicInputs{ data: input_data_elements, result: result_elements }
     }
 

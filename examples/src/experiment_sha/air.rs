@@ -9,23 +9,23 @@ use winterfell::{
 
 
 use super::{BaseElement, FieldElement, ProofOptions};
-use crate::experiment_sha::assertions::{push_program_assertions, ASSERTIONS_LEN};
+use crate::experiment_sha::assertions::{push_input_assertions, push_result_assertions, push_static_assertions, ASSERTIONS_LEN};
 use crate::experiment_sha::transitions::{generate_transitions_degrees, setup_check_bit_transitions, setup_copy_memory_transitions, setup_bit_info_transitions, setup_xor_transitions, setup_and_transitions, setup_or_transitions, setup_not_transitions, setup_ror_transitions, setup_shr_transitions, setup_add_transitions, setup_setb2_transitions};
 use crate::experiment_sha::table::{BIT_REGISTERS_LEN, BIT_REGISTERS_SIZE, IV_INDICES, VARIABLES_COUNT};
-use crate::experiment_sha::utis::{element_to_u32, extend_sha256_block, transpose_vec};
-use crate::experiment_sha::vm_program::{get_program, Command, FromBin, SetB2, ToBin, ToBin2, ADD, AND, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR};
+use crate::experiment_sha::utis::{element_to_u32, transpose_vec};
+use crate::experiment_sha::vm_program::{get_program, Command, FromBin, ResetHardMemory, SetB2, ToBin, ToBin2, ADD, AND, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR};
 use crate::experiment_sha::table::TABLE_WIDTH;
 
 // const NUM_ASSERTIONS: usize = 24;
 
 pub struct PublicInputs {
-    pub data: Vec<BaseElement>,
+    pub data: Vec<[BaseElement; 16]>,
     pub result: Vec<BaseElement>
 }
 
 impl ToElements<BaseElement> for PublicInputs {
     fn to_elements(&self) -> Vec<BaseElement> {
-        let mut elements = self.data.clone();
+        let mut elements: Vec<BaseElement> = self.data.clone().into_iter().flatten().collect();
         elements.extend(self.result.clone());
         elements
     }
@@ -66,6 +66,13 @@ fn generate_periodic_columns() -> Vec<Vec<BaseElement>> {
                         BaseElement::ZERO // Эти переменные изменяются (восстанавливаются из битов)
                     } else {
                         BaseElement::ONE // Остальные переменные копируются
+                    }
+                },
+                cmd if cmd == ResetHardMemory::num() => {
+                    if IV_INDICES.contains(&variable_idx) {
+                        BaseElement::ONE
+                    } else {
+                        BaseElement::ZERO
                     }
                 },
                 _ => BaseElement::ONE,
@@ -424,7 +431,7 @@ fn generate_periodic_columns() -> Vec<Vec<BaseElement>> {
 
 pub struct ExperimentShaAir {
     context: AirContext<BaseElement>,
-    data: Vec<BaseElement>,
+    data: Vec<[BaseElement; 16]>,
     result: Vec<BaseElement>,
 }
 
@@ -456,8 +463,6 @@ impl Air for ExperimentShaAir {
     ) {
         let current = frame.current();
         let next = frame.next();
-        debug_assert_eq!(TABLE_WIDTH, current.len());
-        debug_assert_eq!(TABLE_WIDTH, next.len());
         setup_copy_memory_transitions(result, current, next, periodic_values);
         setup_check_bit_transitions(result, current, next);
         setup_bit_info_transitions(result, current, next, periodic_values);
@@ -469,31 +474,17 @@ impl Air for ExperimentShaAir {
         setup_shr_transitions(result, current, next, periodic_values);
         setup_add_transitions(result, current, next, periodic_values);
         setup_setb2_transitions(result, current, next, periodic_values);
-        // let command = periodic_values[0];
-        // let b1 = periodic_values[1];
-        // println!("command: {:?}", command);
-        // println!("b1: {:?}", b1);
     }
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
-        /*
-        - есть вариант итеративно применять к блокам
-        - посмотреть на периодичные assertions
-        */
         let mut assertions = Vec::new();
-        
-        let d = extend_sha256_block(self.data.clone());
 
-        for i in 0..d.len() {
-            assertions.push(Assertion::single(i, 0, d[i]));
-        }
+        push_static_assertions(&mut assertions);
 
-        let last_step = self.trace_length() - 1;
-        for i in 0..self.result.len() {
-            assertions.push(Assertion::single(IV_INDICES[i], last_step, self.result[i]));
-        }
+        // ata: {:?}", self.data);
+        push_input_assertions(self.data.clone(), &mut assertions);
 
-        push_program_assertions(&mut assertions);
+        push_result_assertions(self.result.clone(), &mut assertions, self.trace_length() - 1);
 
         assertions
     }
@@ -507,7 +498,7 @@ impl Air for ExperimentShaAir {
         let program_result = transpose_vec(get_program());
         periodic_columns.extend(program_result.into_iter());
         
-        // Добавляем столбцы для copy_memory_transitions и битовой информации
+        // Добавляем столбцы для команд программы
         let memory_and_bit_columns = generate_periodic_columns();
         periodic_columns.extend(memory_and_bit_columns);
 
