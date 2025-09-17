@@ -481,7 +481,6 @@ impl Air for ExperimentShaAir {
 
         push_static_assertions(&mut assertions);
 
-        // ata: {:?}", self.data);
         push_input_assertions(self.data.clone(), &mut assertions);
 
         push_result_assertions(self.result.clone(), &mut assertions, self.trace_length() - 1);

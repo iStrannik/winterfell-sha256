@@ -33,14 +33,14 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
     /// Builds an execution trace for computing a sequence of the specified length
     pub fn build_trace(&self, input_data: PublicInputs) -> TraceTable<BaseElement> {
         let program = get_program();
+        assert_eq!(program.len(), PROGRAM_LEN);
         assert_eq!(input_data.result.len(), 8);
         println!("input_data.data.len() = {}", input_data.data.len());
         let mut trace = TraceTable::new(TABLE_WIDTH, program.len() * input_data.data.len());
         trace.fill(
             |state| {
-                let d = extend_sha256_block(input_data.data[0].to_vec());
-                for i in 0..d.len() {
-                    state[i] = d[i];
+                for i in 0..input_data.data[0].len() {
+                    state[i] = input_data.data[0][i];
                 }
                 set_iv(state, get_iv());
 
@@ -53,9 +53,8 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
             },
             |step: usize, state: &mut [BaseElement]| {
                 if step % program.len() == program.len() - 1 {
-                    let d = extend_sha256_block(input_data.data[(step + 1) / program.len()].to_vec());
-                    for i in 0..d.len() {
-                        state[i] = d[i];
+                    for i in 0..input_data.data[(step + 1) / program.len()].len() {
+                        state[i] = input_data.data[(step + 1) / program.len()][i];
                     }
                 } else {
                     let command = program[step % program.len()][0];
@@ -67,9 +66,8 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
                     } else if FromBin::num() == command {
                         FromBin::prove(state, element_to_u32(b1) as usize);
                         /*
-                        if b1 == BaseElement::new(79) {
-                            println!("after copying h");
-                            println!("{:?}", state[72..80].iter().map(|x| format!("{:x}", element_to_u32(*x))).collect::<Vec<String>>().join(" "));
+                        if b1 == BaseElement::new(0) {
+                            println!("w[0] = {:x}", element_to_u32(state[0]));
                         }
                         */
                     } else if XOR::num() == command {

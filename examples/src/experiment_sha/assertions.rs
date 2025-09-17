@@ -1,10 +1,10 @@
 use winterfell::Assertion;
 
-use crate::experiment_sha::{table::IV_INDICES, utis::{extend_sha256_block, get_iv}, vm_program::PROGRAM_LEN};
+use crate::experiment_sha::{table::IV_INDICES, utis::get_iv, vm_program::PROGRAM_LEN};
 
 use super::BaseElement;
 
-pub const INPUT_ASSERTIONS_LEN: usize = 64;
+pub const INPUT_ASSERTIONS_LEN: usize = 16;
 pub const RESULT_ASSERTIONS_LEN: usize = 8;
 pub const IV_ASSERTIONS_LEN: usize = 8;
 
@@ -20,13 +20,11 @@ pub fn push_static_assertions(assertions: &mut Vec<Assertion<BaseElement>>) {
 pub fn push_input_assertions(input: Vec<[BaseElement; 16]>, assertions: &mut Vec<Assertion<BaseElement>>) {
     let mut input_assertions: Vec<Vec<BaseElement>> = vec![vec![]; INPUT_ASSERTIONS_LEN];
     for i in input {
-        let d = extend_sha256_block(i.to_vec());    
-        for j in 0..d.len() {
-            input_assertions[j].push(d[j]);
+        for j in 0..i.len() {
+            input_assertions[j].push(i[j]);
         }
     }
     for i in 0..INPUT_ASSERTIONS_LEN {
-        // println!("input_assertions[{}] = {:?}", i, input_assertions[i]);
         assertions.push(Assertion::sequence(i, 0, PROGRAM_LEN, input_assertions[i].clone()));
     }
 }

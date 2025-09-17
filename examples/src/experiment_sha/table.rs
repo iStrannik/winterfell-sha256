@@ -7,14 +7,14 @@ use super::BaseElement;
 /* 
 Table structure
 
-00..63  columns - array of w    // hard memory
-64..71  columns - iv            // ram
-72..87  columns - tmp variables // registers
-88..151 columns - bitregistres  // bit registers
+00..15  columns - array of w    // hard memory
+16..23  columns - iv            // ram
+24..35  columns - tmp variables // registers
+36..99 columns - bitregistres  // bit registers
 
 */
 
-pub const HARD_MEMORY_LEN: usize = 64;
+pub const HARD_MEMORY_LEN: usize = 16;
 pub const HARD_MEMORY_START: usize = 0;
 
 pub const HARD_MEMORY_INDICES: [usize; HARD_MEMORY_LEN] = {
@@ -40,7 +40,7 @@ pub const IV_INDICES: [usize; IV_LEN] = {
     indices
 };
 
-pub const REGISTERS_COUNT: usize = 16;
+pub const REGISTERS_COUNT: usize = 12;
 pub const REGISTERS_SIZE: usize = 1;
 pub const REGISTERS_LEN: usize = REGISTERS_COUNT * REGISTERS_SIZE;
 pub const REGISTERS_START: usize = IV_START + IV_LEN;

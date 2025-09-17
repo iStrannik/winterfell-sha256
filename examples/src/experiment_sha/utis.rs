@@ -1,3 +1,5 @@
+use crate::experiment_sha::table::IV_INDICES;
+
 use super::BaseElement;
 use super::FieldElement;
 
@@ -71,8 +73,8 @@ pub fn transpose_vec(input: Vec<[BaseElement; 2]>) -> [Vec<BaseElement>; 2] {
 
 pub fn extract_hash(state: &[BaseElement]) -> Vec<u8> {
     let mut hash = Vec::with_capacity(32);
-    for i in 0..8 {
-        hash.extend_from_slice(&element_to_u32(state[64 + i]).to_be_bytes());
+    for i in IV_INDICES {
+        hash.extend_from_slice(&element_to_u32(state[i]).to_be_bytes());
     }
     hash
 }
