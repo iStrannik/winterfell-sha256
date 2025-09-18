@@ -10,7 +10,7 @@ use winterfell::{
 
 use super::{BaseElement, FieldElement, ProofOptions};
 use crate::experiment_sha::assertions::{push_input_assertions, push_result_assertions, push_static_assertions, ASSERTIONS_LEN};
-use crate::experiment_sha::transitions::{generate_transitions_degrees, setup_check_bit_transitions, setup_copy_memory_transitions, setup_bit_info_transitions, setup_xor_transitions, setup_and_transitions, setup_or_transitions, setup_not_transitions, setup_ror_transitions, setup_shr_transitions, setup_add_transitions, setup_setb2_transitions};
+use crate::experiment_sha::transitions::{generate_transitions_degrees, setup_add_transitions, setup_and_transitions, setup_bit_info_transitions, setup_check_bit_transitions, setup_copy_memory_transitions, setup_not_transitions, setup_or_transitions, setup_ror_transitions, setup_setb2_transitions, setup_shr_transitions, setup_xor_transitions, ROR_TRANSITIONS_SHIFTS};
 use crate::experiment_sha::table::{BIT_REGISTERS_LEN, BIT_REGISTERS_SIZE, IV_INDICES, VARIABLES_COUNT};
 use crate::experiment_sha::utis::{element_to_u32, transpose_vec};
 use crate::experiment_sha::vm_program::{get_program, Command, FromBin, ResetHardMemory, SetB2, ToBin, ToBin2, ADD, AND, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR};
@@ -347,24 +347,27 @@ fn generate_periodic_columns() -> Vec<Vec<BaseElement>> {
     }        
     columns.push(not_column);
     
-    // Добавляем флаги для ROR переходов
-    let mut ror_column = Vec::new();
-    
-    // Анализируем каждый шаг программы
-    for step in 0..program.len() {
-        let command = program[step][0];
+    for shift in ROR_TRANSITIONS_SHIFTS {
+        // Добавляем флаги для ROR переходов
+        let mut ror_column = Vec::new();
         
-        let ror_flag = match command {
-            cmd if cmd == ROR::num() => {
-                // Для ROR: активируем переходы для всех битов B1
-                BaseElement::ONE
-            },
-            _ => BaseElement::ZERO, // Для других команд не выполняем ROR
-        };
-        
-        ror_column.push(ror_flag);
-    }        
-    columns.push(ror_column);
+        // Анализируем каждый шаг программы
+        for step in 0..program.len() {
+            let command = program[step][0];
+            let b1 = program[step][1];
+            
+            let ror_flag = match command {
+                cmd if cmd == ROR::num() && element_to_u32(b1) as usize == shift => {
+                    // Для ROR: активируем переходы для всех битов B1
+                    BaseElement::ONE
+                },
+                _ => BaseElement::ZERO, // Для других команд не выполняем ROR
+            };
+            
+            ror_column.push(ror_flag);
+        }        
+        columns.push(ror_column);
+    }
     
     // Добавляем флаги для SHR переходов
     let mut shr_column = Vec::new();

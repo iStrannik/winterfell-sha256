@@ -136,7 +136,7 @@ pub fn not_bit_registers(state: &mut [BaseElement]) {
     }
 }
 
-pub fn ror_bit_registers(state: &mut [BaseElement]) {
+pub fn ror_bit_registers(state: &mut [BaseElement], shift: usize) {
     // Циклический сдвиг вправо: младший бит становится старшим
     let mut bits = [0u32; BIT_REGISTERS_SIZE];
     
@@ -144,17 +144,15 @@ pub fn ror_bit_registers(state: &mut [BaseElement]) {
     for (i, &idx) in B1.iter().enumerate() {
         bits[i] = element_to_u32(state[idx]);
     }
-    
-    // Выполняем циклический сдвиг вправо
-    let lsb = bits[0]; // Сохраняем младший бит
-    for i in 0..BIT_REGISTERS_SIZE - 1 {
-        bits[i] = bits[i + 1]; // Сдвигаем все биты вправо
+
+    let mut new_bits = [0u32; BIT_REGISTERS_SIZE];
+    for i in 0..BIT_REGISTERS_SIZE {
+        new_bits[i] = bits[(i + shift) % BIT_REGISTERS_SIZE];
     }
-    bits[BIT_REGISTERS_SIZE - 1] = lsb; // Младший бит становится старшим
     
     // Записываем результат обратно в B1
     for (i, &idx) in B1.iter().enumerate() {
-        state[idx] = BaseElement::new(bits[i] as u128);
+        state[idx] = BaseElement::new(new_bits[i] as u128);
     }
 }
 

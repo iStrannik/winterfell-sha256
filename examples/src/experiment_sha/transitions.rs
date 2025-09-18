@@ -130,7 +130,8 @@ pub const NOT_TRANSITIONS_INDICES: [usize; NOT_TRANSITIONS_LEN] = {
     indices
 };
 
-pub const ROR_TRANSITIONS_LEN: usize = BIT_REGISTERS_SIZE;
+pub const ROR_TRANSITIONS_SHIFTS: [usize; 10] = [2, 6, 7, 11, 13, 17, 18, 19, 22, 25]; 
+pub const ROR_TRANSITIONS_LEN: usize = ROR_TRANSITIONS_SHIFTS.len();
 pub const ROR_TRANSITIONS_START: usize = NOT_TRANSITIONS_START + NOT_TRANSITIONS_LEN;
 pub const ROR_TRANSITIONS_INDICES: [usize; ROR_TRANSITIONS_LEN] = {
     let mut indices = [0; ROR_TRANSITIONS_LEN];
@@ -312,17 +313,11 @@ pub fn setup_xor_transitions<E: FieldElement + From<BaseElement>>(transitions: &
 
 pub fn setup_and_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для AND операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 1; // +1 для XOR
+    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 1;
     let flag = periodic_values[periodic_idx];
     
     // Обрабатываем AND transitions
     for i in 0..AND_TRANSITIONS_LEN {
-        // Проверяем, что индекс не выходит за границы массива
-        if periodic_idx >= periodic_values.len() {
-            println!("ERROR: periodic_idx {} >= periodic_values.len() {}", periodic_idx, periodic_values.len());
-            break;
-        }
-        
         // Для AND: проверяем, что операция выполнена правильно
         let constraint_value = AND::eval_transitions(current_frame, next_frame, i, periodic_values);
         transitions.agg_constraint(AND_TRANSITIONS_INDICES[i], flag, constraint_value);
@@ -331,7 +326,7 @@ pub fn setup_and_transitions<E: FieldElement + From<BaseElement>>(transitions: &
 
 pub fn setup_or_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для OR операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 2; // +2 для XOR и AND
+    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 2;
     let flag = periodic_values[periodic_idx];
     
     // Обрабатываем OR transitions
@@ -350,7 +345,7 @@ pub fn setup_or_transitions<E: FieldElement + From<BaseElement>>(transitions: &m
 
 pub fn setup_not_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для NOT операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 3; // +3 для XOR, AND и OR
+    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 3;
     let flag = periodic_values[periodic_idx];
     
     // Обрабатываем NOT transitions
@@ -369,26 +364,26 @@ pub fn setup_not_transitions<E: FieldElement + From<BaseElement>>(transitions: &
 
 pub fn setup_ror_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для ROR операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 4; // +4 для XOR, AND, OR и NOT
-    let flag = periodic_values[periodic_idx];
+    let mut periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 4;
     
     // Обрабатываем ROR transitions
     for i in 0..ROR_TRANSITIONS_LEN {
+        let flag = periodic_values[periodic_idx];
         // Проверяем, что индекс не выходит за границы массива
         if periodic_idx >= periodic_values.len() {
             println!("ERROR: periodic_idx {} >= periodic_values.len() {}", periodic_idx, periodic_values.len());
             break;
         }
-        
         // Для ROR: проверяем, что операция выполнена правильно
-        let constraint_value = ROR::eval_transitions(current_frame, next_frame, i, periodic_values);
+        let constraint_value = ROR::eval_transitions(current_frame, next_frame, ROR_TRANSITIONS_SHIFTS[i], periodic_values);
         transitions.agg_constraint(ROR_TRANSITIONS_INDICES[i], flag, constraint_value);
+        periodic_idx += 1;
     }
 }
 
 pub fn setup_shr_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для SHR операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 5; // +5 для XOR, AND, OR, NOT и ROR
+    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 4 + ROR_TRANSITIONS_LEN;
     let flag = periodic_values[periodic_idx];
     
     // Обрабатываем SHR transitions
@@ -407,7 +402,7 @@ pub fn setup_shr_transitions<E: FieldElement + From<BaseElement>>(transitions: &
 
 pub fn setup_add_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для ADD операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 6; // +6 для XOR, AND, OR, NOT, ROR и SHR
+    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 4 + ROR_TRANSITIONS_LEN + 1;
     let flag = periodic_values[periodic_idx];
     
     // Обрабатываем ADD transitions
@@ -426,7 +421,7 @@ pub fn setup_add_transitions<E: FieldElement + From<BaseElement>>(transitions: &
 
 pub fn setup_setb2_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
     // Используем периодические значения как флаги для SetB2 операций
-    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 7; // +7 для XOR, AND, OR, NOT, ROR, SHR и ADD
+    let periodic_idx = 2 + MEMORY_TRANSITIONS_LEN + BIT_MEMORY_TRANSITIONS_LEN + TO_B1_TRANSITIONS_LEN + TO_B2_TRANSITIONS_LEN + FROM_BIN_TRANSITIONS_LEN + 4 + ROR_TRANSITIONS_LEN + 2;
     let flag = periodic_values[periodic_idx];
     
     // Обрабатываем SetB2 transitions
