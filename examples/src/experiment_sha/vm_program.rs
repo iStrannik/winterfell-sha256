@@ -290,7 +290,7 @@ impl Command for SetB2 {
     
     fn prove(state: &mut [BaseElement], value: usize) {
         // Получаем значение из параметра value и устанавливаем его в B2
-        let base_element_value = BaseElement::new(value as u128);
+        let base_element_value = BaseElement::new(value as u64);
         set_to_bit_register_b2(state, base_element_value);
     }
 }
@@ -371,125 +371,125 @@ fn sample_program() -> Vec<[BaseElement; 2]> {
 
 fn create_tmp_iv() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(IV_INDICES[0] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)], // tmp_h[0]
-        [ToBin::num(), BaseElement::new(IV_INDICES[1] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)], // tmp_h[1]
-        [ToBin::num(), BaseElement::new(IV_INDICES[2] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)], // tmp_h[2]
-        [ToBin::num(), BaseElement::new(IV_INDICES[3] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)], // tmp_h[3]
-        [ToBin::num(), BaseElement::new(IV_INDICES[4] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)], // tmp_h[4]
-        [ToBin::num(), BaseElement::new(IV_INDICES[5] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)], // tmp_h[5]
-        [ToBin::num(), BaseElement::new(IV_INDICES[6] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)], // tmp_h[6]
-        [ToBin::num(), BaseElement::new(IV_INDICES[7] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)], // tmp_h[7]
+        [ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)], // tmp_h[0]
+        [ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)], // tmp_h[1]
+        [ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)], // tmp_h[2]
+        [ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)], // tmp_h[3]
+        [ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)], // tmp_h[4]
+        [ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)], // tmp_h[5]
+        [ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)], // tmp_h[6]
+        [ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)], // tmp_h[7]
     ]
 }
 
 // Set s1 to 80 register
 fn calc_s1() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
         [ROR::num(), BaseElement::new(6)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
         [ROR::num(), BaseElement::new(11)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
         [ROR::num(), BaseElement::new(25)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
     ]
 }
 
 // Set ch to 81 register
 fn calc_ch() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
         [AND::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
         [NOT::num(), BaseElement::new(0)],
         [AND::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
     ]
 }
 
 // Set temp1 to 80 register
 fn calc_temp1(i: usize) -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [SetB2::num(), BaseElement::new(K[i] as u128)],
+        [SetB2::num(), BaseElement::new(K[i] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u128)],
+        [ToBin2::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
     ]
 }
 
 // Set s0 to 81 register
 fn calc_s0() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
         [ROR::num(), BaseElement::new(2)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
         [ROR::num(), BaseElement::new(13)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)], 
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)], 
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
         [ROR::num(), BaseElement::new(22)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
     ]
 }
 
 // Set maj to 82 register
 fn calc_maj() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
         [AND::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
         [AND::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
         [AND::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[11] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
     ]
 }
 
 // Set temp2 to 81 register
 fn calc_temp2() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
     ]
 }
 
@@ -500,29 +500,29 @@ fn update_w_i(i: usize) -> Vec<[BaseElement; 2]> {
         w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
     */
     vec![
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u128)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)],
         [ROR::num(), BaseElement::new(7)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)],
         [ROR::num(), BaseElement::new(18)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)],
         [SHR::num(), BaseElement::new(0)],
         [SHR::num(), BaseElement::new(0)],
         [SHR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)], // save s0 to r0
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)], // save s0 to r0
 
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u128)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)],
         [ROR::num(), BaseElement::new(17)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)],
         [ROR::num(), BaseElement::new(19)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)],
         [SHR::num(), BaseElement::new(0)],
         [SHR::num(), BaseElement::new(0)],
         [SHR::num(), BaseElement::new(0)],
@@ -533,82 +533,82 @@ fn update_w_i(i: usize) -> Vec<[BaseElement; 2]> {
         [SHR::num(), BaseElement::new(0)],
         [SHR::num(), BaseElement::new(0)],
         [SHR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
         [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)], // save s1 to r1
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)], // save s1 to r1
 
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u128)],
+        [ToBin2::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u128)],
+        [FromBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
     ]
 }
 
 fn update_tmp_h() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
+        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
     ]
 }
 
 fn update_h() -> Vec<[BaseElement; 2]> {
     vec![
-        [ToBin::num(), BaseElement::new(IV_INDICES[0] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[0] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[1] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[1] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[2] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[2] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[3] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[3] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[4] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[4] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[5] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[5] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[6] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[6] as u128)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[7] as u128)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
+        [ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
+        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
         [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[7] as u128)],
+        [FromBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
     ]
 }
 

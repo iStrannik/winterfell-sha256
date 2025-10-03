@@ -8,6 +8,7 @@ use std::time::Instant;
 use examples::{experiment_sha, fibonacci, rescue, vdf, ExampleOptions, ExampleType};
 #[cfg(feature = "std")]
 use examples::{lamport, merkle, rescue_raps};
+use examples::proof_size_benchmark::ProofSizeBenchmark;
 use structopt::StructOpt;
 use tracing::info_span;
 #[cfg(feature = "tracing-forest")]
@@ -16,6 +17,37 @@ use tracing_forest::ForestLayer;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use winterfell::Proof;
+
+// BENCHMARK RUNNER
+// ================================================================================================
+
+fn run_proof_size_benchmark(output_dir: &str) {
+    println!("Запуск бенчмарков размера доказательств...");
+    
+    let benchmark = ProofSizeBenchmark::new();
+    
+    match benchmark.run_all_benchmarks() {
+        Ok(results) => {
+            println!("Бенчмарки завершены успешно!");
+            
+            // Сохраняем результаты в CSV
+            let csv_filename = format!("{}/benchmark_results.csv", output_dir);
+            if let Err(e) = benchmark.save_results_to_csv(&results, &csv_filename) {
+                eprintln!("Ошибка при сохранении CSV: {}", e);
+            }
+            
+            // Создаем графики
+            if let Err(e) = benchmark.create_plots(&results, output_dir) {
+                eprintln!("Ошибка при создании графиков: {}", e);
+            }
+            
+            println!("Результаты сохранены в директории: {}", output_dir);
+        }
+        Err(e) => {
+            eprintln!("Ошибка при выполнении бенчмарков: {}", e);
+        }
+    }
+}
 
 // EXAMPLE RUNNER
 // ================================================================================================
@@ -85,6 +117,10 @@ fn main() {
         #[cfg(feature = "std")]
         ExampleType::ExperimentSha { string_length } => {
             experiment_sha::get_example(&options, string_length)
+        },
+        ExampleType::ProofSizeBenchmark { output_dir } => {
+            run_proof_size_benchmark(&output_dir);
+            return;
         },
     }
     .expect("The example failed to initialize.");

@@ -6,7 +6,7 @@
 use structopt::StructOpt;
 use winterfell::{
     crypto::hashers::{Rp64_256, RpJive64_256},
-    math::fields::f128::BaseElement,
+    math::fields::{f128::BaseElement as F128BaseElement, f64::BaseElement as F64BaseElement},
     BatchingMethod, FieldExtension, Proof, ProofOptions, VerifierError,
 };
 
@@ -16,6 +16,7 @@ pub mod fibonacci;
 pub mod lamport;
 #[cfg(feature = "std")]
 pub mod merkle;
+pub mod proof_size_benchmark;
 pub mod rescue;
 #[cfg(feature = "std")]
 pub mod rescue_raps;
@@ -28,9 +29,14 @@ mod tests;
 // TYPES AND INTERFACES
 // ================================================================================================
 
-pub type Blake3_192 = winterfell::crypto::hashers::Blake3_192<BaseElement>;
-pub type Blake3_256 = winterfell::crypto::hashers::Blake3_256<BaseElement>;
-pub type Sha3_256 = winterfell::crypto::hashers::Sha3_256<BaseElement>;
+pub type Blake3_192 = winterfell::crypto::hashers::Blake3_192<F128BaseElement>;
+pub type Blake3_256 = winterfell::crypto::hashers::Blake3_256<F128BaseElement>;
+pub type Sha3_256 = winterfell::crypto::hashers::Sha3_256<F128BaseElement>;
+
+// Hash functions for f64 field
+pub type Blake3_192F64 = winterfell::crypto::hashers::Blake3_192<F64BaseElement>;
+pub type Blake3_256F64 = winterfell::crypto::hashers::Blake3_256<F64BaseElement>;
+pub type Sha3_256F64 = winterfell::crypto::hashers::Sha3_256<F64BaseElement>;
 
 pub trait Example {
     fn prove(&self) -> Proof;
@@ -218,8 +224,14 @@ pub enum ExampleType {
     // Compute a SHA256 hash of a string
     ExperimentSha {
         /// Length of string; number of blocks after padding must be power of two
-        #[structopt(short = "n", default_value = "1000")]
+        #[structopt(short = "n", default_value = "240")]
         string_length: usize,
+    },
+    /// Run proof size benchmarks
+    ProofSizeBenchmark {
+        /// Output directory for results
+        #[structopt(short = "o", long = "output", default_value = "benchmark_results")]
+        output_dir: String,
     },
 }
 

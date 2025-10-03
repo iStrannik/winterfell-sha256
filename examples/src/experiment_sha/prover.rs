@@ -7,7 +7,7 @@ use winterfell::{
     crypto::MerkleTree, matrix::ColMatrix, AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable
 };
 
-use crate::experiment_sha::{air::PublicInputs, table::{set_iv, INPUT_BASE_ELEMENTS, IV_INDICES}, utis::{element_to_u32, extend_sha256_block, extract_hash, get_iv}, vm_program::{get_program, Command, FromBin, SetB2, ToBin, ToBin2, ADD, AND, NOP, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR, ResetHardMemory}};
+use crate::experiment_sha::{air::PublicInputs, table::{set_iv, INPUT_BASE_ELEMENTS, IV_INDICES}, utis::{element_to_u32, extract_hash, get_iv}, vm_program::{get_program, Command, FromBin, SetB2, ToBin, ToBin2, ADD, AND, NOP, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR, ResetHardMemory}};
 use crate::experiment_sha::table::TABLE_WIDTH;
 
 use super::{

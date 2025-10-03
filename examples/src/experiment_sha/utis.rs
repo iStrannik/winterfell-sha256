@@ -13,7 +13,7 @@ pub fn extend_sha256_block(data: Vec<BaseElement>) -> Vec<BaseElement> {
         let s1 = (w[i - 2].rotate_right(17)) ^ (w[i - 2].rotate_right(19)) ^ (w[i - 2] >> 10);
         w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
     }
-    w.iter().map(|e| BaseElement::new(*e as u128)).collect()
+    w.iter().map(|e| BaseElement::new(*e as u64)).collect()
 }
 
 pub fn prepare_sha_256_block(s: &String) -> Vec<BaseElement> {
@@ -29,7 +29,7 @@ pub fn prepare_sha_256_block(s: &String) -> Vec<BaseElement> {
 }
 
 pub fn bytes_to_elements(s: &[u8]) -> Vec<BaseElement> {
-    s.chunks_exact(4).map(|chunk| BaseElement::new(u32::from_be_bytes(chunk.try_into().unwrap()) as u128)).collect()
+    s.chunks_exact(4).map(|chunk| BaseElement::new(u32::from_be_bytes(chunk.try_into().unwrap()) as u64)).collect()
 }
 
 pub fn string_to_elements(s: &String) -> Vec<BaseElement> {
@@ -48,7 +48,7 @@ pub fn get_iv() -> [BaseElement; 8] {
     [
         0x6a09e667u32, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
         0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-    ].map(|u| BaseElement::new(u as u128)).to_vec().try_into().unwrap()
+    ].map(|u| BaseElement::new(u as u64)).to_vec().try_into().unwrap()
 }
 
 pub fn transpose<const M: usize, const N: usize>(input: [[BaseElement; N]; M]) -> [[BaseElement; M]; N] {

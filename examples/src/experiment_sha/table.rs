@@ -92,7 +92,7 @@ pub const INPUT_BASE_ELEMENTS: usize = INPUT_STRING_LENGTH / 4;
 pub fn set_to_bit_register(state: &mut [BaseElement], u: BaseElement, b: [usize; BIT_REGISTERS_SIZE]) {
     let mut a = element_to_u32(u);
     for i in b {
-        state[i] = BaseElement::new((a & 1) as u128);
+        state[i] = BaseElement::new((a & 1) as u64);
         a /= 2;
     }
 }
@@ -114,25 +114,25 @@ pub fn set_from_bit_register(state: &mut [BaseElement], u: usize, b: [usize; BIT
 
 pub fn xor_bit_registers(state: &mut [BaseElement]) {
     for i in zip(B1, B2) {
-        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) ^ element_to_u32(state[i.1])) as u128);
+        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) ^ element_to_u32(state[i.1])) as u64);
     }
 }
 
 pub fn and_bit_registers(state: &mut [BaseElement]) {
     for i in zip(B1, B2) {
-        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) & element_to_u32(state[i.1])) as u128);
+        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) & element_to_u32(state[i.1])) as u64);
     }
 }
 
 pub fn or_bit_registers(state: &mut [BaseElement]) {
     for i in zip(B1, B2) {
-        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) | element_to_u32(state[i.1])) as u128);
+        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) | element_to_u32(state[i.1])) as u64);
     }
 }
 
 pub fn not_bit_registers(state: &mut [BaseElement]) {
     for i in B1 {
-        state[i] = BaseElement::new((1 - element_to_u32(state[i])) as u128);
+        state[i] = BaseElement::new((1 - element_to_u32(state[i])) as u64);
     }
 }
 
@@ -152,7 +152,7 @@ pub fn ror_bit_registers(state: &mut [BaseElement], shift: usize) {
     
     // Записываем результат обратно в B1
     for (i, &idx) in B1.iter().enumerate() {
-        state[idx] = BaseElement::new(new_bits[i] as u128);
+        state[idx] = BaseElement::new(new_bits[i] as u64);
     }
 }
 
@@ -173,7 +173,7 @@ pub fn shr_bit_registers(state: &mut [BaseElement]) {
     
     // Записываем результат обратно в B1
     for (i, &idx) in B1.iter().enumerate() {
-        state[idx] = BaseElement::new(bits[i] as u128);
+        state[idx] = BaseElement::new(bits[i] as u64);
     }
 }
 
@@ -205,7 +205,7 @@ pub fn add_bit_registers(state: &mut [BaseElement]) {
     // Разбиваем результат обратно на биты и записываем в B1
     for (i, &idx) in B1.iter().enumerate() {
         let bit = (result >> i) & 1;
-        state[idx] = BaseElement::new(bit as u128);
+        state[idx] = BaseElement::new(bit as u64);
     }
 }
 
