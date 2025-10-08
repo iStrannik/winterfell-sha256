@@ -12,11 +12,13 @@ use winterfell::{
     Proof, ProofOptions, Prover, Trace, VerifierError,
 };
 
-use crate::{experiment_sha::{air::PublicInputs, table::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block}}, Blake3_192F64, Blake3_256F64, Example, ExampleOptions, HashFunction, Sha3_256F64};
+use crate::{experiment_sha::{air::PublicInputs, table_constants::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block}}, Blake3_192F64, Blake3_256F64, Example, ExampleOptions, HashFunction, Sha3_256F64};
 
 mod air;
 mod assertions;
 use air::ExperimentShaAir;
+mod table_constants;
+mod transitions_constants;
 mod transitions;
 mod utis;
 mod table;

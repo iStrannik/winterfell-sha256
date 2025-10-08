@@ -1,190 +1,182 @@
-use crate::experiment_sha::table::{add_bit_registers, and_bit_registers, not_bit_registers, or_bit_registers, ror_bit_registers, set_from_bit_register, set_to_bit_register, set_to_bit_register_b2, shr_bit_registers, xor_bit_registers, B1, B2, HARD_MEMORY_INDICES, IV_INDICES, REGISTERS_INDICES};
+use crate::{experiment_sha::{table::{and_bit_registers, not_bit_registers, ror_bit_registers, set_from_bit_register, set_to_bit_register, shr_bit_registers, xor_bit_registers}, utis::element_to_u32}, utils::{are_equal, EvaluationResult}};
+
+use crate::experiment_sha::transitions_constants::*;
+use crate::experiment_sha::table_constants::*;
 
 use super::{BaseElement, FieldElement};
 
 pub trait Command {
     fn num() -> BaseElement;
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, periodic_values: &[E]) -> E;
-    fn prove(state: &mut [BaseElement], b1: usize);
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]);
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], b1: usize);
 }
 
 pub struct ToBin;
+impl ToBin {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize) -> E{
+        let two = E::from(BaseElement::new(2));
+        let mut p = E::from(BaseElement::new(1));
+        let mut in_register = E::from(BaseElement::new(0));
+        for i in B1 {
+            in_register += next_frame[i] * p;
+            p = two * p;
+        }
+        in_register - current_frame[idx]
+    }
+}
 
 impl Command for ToBin {
     fn num() -> BaseElement {
         BaseElement::new(0)
     }
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        let two = E::from(BaseElement::new(2));
-        let mut p = E::from(BaseElement::new(1));
-        let mut in_register = E::from(BaseElement::new(0));
-        for i in B1 {
-            in_register += next_frame[i] * p;
-            p = two * p;
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]){
+        for i in 0..TO_B1_TRANSITIONS_LEN {
+            let flag = periodic_values[PERIODIC_TO_B1_COLUMNS_INDICES[i]];
+            let constraint_value = ToBin::eval_single_transition(current_frame, next_frame, i);            
+            transitions.agg_constraint(TO_B1_TRANSITIONS_INDICES[i], flag, constraint_value);
         }
-        in_register - current_frame[idx]
+        
     }
     
-    fn prove(state: &mut [BaseElement], b1: usize) {
-        set_to_bit_register(state, state[b1], B1);
-    }
-}
-
-pub struct ToBin2;
-
-impl Command for ToBin2 {
-    fn num() -> BaseElement {
-        BaseElement::new(2)
-    }
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        let two = E::from(BaseElement::new(2));
-        let mut p = E::from(BaseElement::new(1));
-        let mut in_register = E::from(BaseElement::new(0));
-        for i in B2 {
-            in_register += next_frame[i] * p;
-            p = two * p;
-        }
-        in_register - current_frame[idx]
-    }
-    
-    fn prove(state: &mut [BaseElement], b1: usize) {
-        set_to_bit_register(state, state[b1], B2);
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], b1: usize) {
+        set_to_bit_register(final_state, final_state[b1], B1);
     }
 }
 
 pub struct FromBin;
 
-impl Command for FromBin {
-    fn num() -> BaseElement {
-        BaseElement::new(1)
-    }
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
+impl FromBin {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(next_frame: &[E], idx: usize) -> E {
         let two = E::from(BaseElement::new(2));
         let mut p = E::from(BaseElement::new(1));
         let mut in_register = E::from(BaseElement::new(0));
         for i in B1 {
-            in_register += current_frame[i] * p;
+            in_register += next_frame[i] * p;
             p = two * p;
         }
         in_register - next_frame[idx]
     }
+}
+
+
+impl Command for FromBin {
+    fn num() -> BaseElement {
+        BaseElement::new(1)
+    }
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], _: &[E], next_frame: &[E], periodic_values: &[E]) {
+        for i in 0..FROM_BIN_TRANSITIONS_LEN {            
+            let flag = periodic_values[PERIODIC_FROM_BIN_COLUMNS_INDICES[i]];
+            let constraint_value = FromBin::eval_single_transition(next_frame, i);
+            transitions.agg_constraint(FROM_BIN_TRANSITIONS_INDICES[i], flag, constraint_value);
+        }
+    }
     
-    fn prove(state: &mut [BaseElement], b1: usize) {
-        set_from_bit_register(state, b1, B1);
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], b1: usize) {
+        set_from_bit_register(final_state, b1, B1);
     }
 }
 
 pub struct XOR;
 
+impl XOR {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize) -> E {
+        let two = E::from(BaseElement::new(2));
+        let mut p = E::from(BaseElement::new(1));
+        let mut in_register = E::from(BaseElement::new(0));
+        for i in B1 {
+            in_register += (current_frame[i] + next_frame[i] - E::from(BaseElement::new(2)) * current_frame[i] * next_frame[i]) * p;
+            p = two * p;
+        }
+        in_register - next_frame[idx]
+    }
+}
+
 impl Command for XOR {
     fn num() -> BaseElement {
-        BaseElement::new(3)
+        BaseElement::new(2)
     }
     
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        // Проверяем, что XOR выполнен правильно для бита idx в B1
-        // next_frame[B1[idx]] должно быть равно current_frame[B1[idx]] XOR current_frame[B2[idx]]
-        let b1_current = current_frame[B1[idx]];
-        let b2_current = current_frame[B2[idx]];
-        let b1_next = next_frame[B1[idx]];
-        
-        // XOR для бинарных значений: a XOR b = a + b - 2*a*b
-        let xor_result = b1_current + b2_current - E::from(BaseElement::new(2)) * b1_current * b2_current;
-        
-        b1_next - xor_result
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        for i in 0..XOR_TRANSITIONS_LEN {
+            let flag = periodic_values[PERIODIC_XOR_COLUMNS_INDICES[i]];
+            let constraint_value = XOR::eval_single_transition(current_frame, next_frame, REGISTERS_INDICES[i]);
+            transitions.agg_constraint(XOR_TRANSITIONS_INDICES[i], flag, constraint_value);
+        }
     }
     
-    fn prove(state: &mut [BaseElement], _: usize) {
-        // Выполняем XOR между B1 и B2, результат сохраняем в B1
-        xor_bit_registers(state);
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+        xor_bit_registers(initial_state, final_state, idx);
     }
 }
 
 pub struct AND;
 
-impl Command for AND {
-    fn num() -> BaseElement {
-        BaseElement::new(4)
-    }
-    
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        // Проверяем, что AND выполнен правильно для бита idx в B1
-        // next_frame[B1[idx]] должно быть равно current_frame[B1[idx]] AND current_frame[B2[idx]]
-        let b1_current = current_frame[B1[idx]];
-        let b2_current = current_frame[B2[idx]];
-        let b1_next = next_frame[B1[idx]];
-        
-        // AND для бинарных значений: a AND b = a * b
-        let and_result = b1_current * b2_current;
-        
-        b1_next - and_result
-    }
-    
-    fn prove(state: &mut [BaseElement], _: usize) {
-        // Выполняем AND между B1 и B2, результат сохраняем в B1
-        and_bit_registers(state);
+impl AND {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize) -> E {
+        let two = E::from(BaseElement::new(2));
+        let mut p = E::from(BaseElement::new(1));
+        let mut in_register = E::from(BaseElement::new(0));
+        for i in B1 {
+            in_register += (current_frame[i] * next_frame[i]) * p;
+            p = two * p;
+        }
+        in_register - next_frame[idx]
     }
 }
 
-pub struct OR;
-
-impl Command for OR {
+impl Command for AND {
     fn num() -> BaseElement {
-        BaseElement::new(5)
+        BaseElement::new(3)
     }
     
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        // Проверяем, что OR выполнен правильно для бита idx в B1
-        // next_frame[B1[idx]] должно быть равно current_frame[B1[idx]] OR current_frame[B2[idx]]
-        let b1_current = current_frame[B1[idx]];
-        let b2_current = current_frame[B2[idx]];
-        let b1_next = next_frame[B1[idx]];
-        
-        // OR для бинарных значений: a OR b = a + b - a*b
-        let or_result = b1_current + b2_current - b1_current * b2_current;
-        
-        b1_next - or_result
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        for i in 0..AND_TRANSITIONS_LEN {
+            let flag = periodic_values[PERIODIC_AND_COLUMNS_INDICES[i]];
+            let constraint_value = AND::eval_single_transition(current_frame, next_frame, REGISTERS_INDICES[i]);
+            transitions.agg_constraint(AND_TRANSITIONS_INDICES[i], flag, constraint_value);
+        }
     }
     
-    fn prove(state: &mut [BaseElement], _: usize) {
-        // Выполняем OR между B1 и B2, результат сохраняем в B1
-        or_bit_registers(state);
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+        and_bit_registers(initial_state, final_state, idx);
     }
 }
 
 pub struct NOT;
 
-impl Command for NOT {
-    fn num() -> BaseElement {
-        BaseElement::new(6)
-    }
-    
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        // Проверяем, что NOT выполнен правильно для бита idx в B1
-        // next_frame[B1[idx]] должно быть равно NOT current_frame[B1[idx]]
+impl NOT {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize) -> E {
         let b1_current = current_frame[B1[idx]];
         let b1_next = next_frame[B1[idx]];
-        
-        // NOT для бинарных значений: NOT a = 1 - a
         let not_result = E::from(BaseElement::new(1)) - b1_current;
         
         b1_next - not_result
     }
+}
+
+impl Command for NOT {
+    fn num() -> BaseElement {
+        BaseElement::new(4)
+    }
     
-    fn prove(state: &mut [BaseElement], _: usize) {
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        let flag = periodic_values[PERIODIC_NOT_COLUMNS_INDICES[0]];
+        for i in 0..NOT_TRANSITIONS_LEN {
+            let constraint_value = NOT::eval_single_transition(current_frame, next_frame, i);
+            transitions.agg_constraint(NOT_TRANSITIONS_INDICES[i], flag, constraint_value);
+        }
+    }
+    
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], _: usize) {
         // Выполняем NOT для B1, результат сохраняем в B1
-        not_bit_registers(state);
+        not_bit_registers(final_state);
     }
 }
 
 pub struct ROR;
 
-impl Command for ROR {
-    fn num() -> BaseElement {
-        BaseElement::new(7)
-    }
-    
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
+impl ROR {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize) -> E {
         let two = E::from(BaseElement::new(2));
         let mut p = E::from(BaseElement::new(1));
         let mut current_register = E::from(BaseElement::new(0));
@@ -201,97 +193,161 @@ impl Command for ROR {
         }
         next_register - current_register
     }
+}
+
+impl Command for ROR {
+    fn num() -> BaseElement {
+        BaseElement::new(5)
+    }
     
-    fn prove(state: &mut [BaseElement], shift: usize) {
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        for i in 0..ROR_TRANSITIONS_LEN {
+            let flag = periodic_values[PERIODIC_ROR_COLUMNS_INDICES[i]];
+            let constraint_value = ROR::eval_single_transition(current_frame, next_frame, ROR_TRANSITIONS_SHIFTS[i]);
+            transitions.agg_constraint(ROR_TRANSITIONS_INDICES[i], flag, constraint_value);
+        }
+    }
+    
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], shift: usize) {
         // Выполняем циклический сдвиг вправо для B1, результат сохраняем в B1
-        ror_bit_registers(state, shift);
+        ror_bit_registers(final_state, shift);
     }
 }
 
 pub struct SHR;
 
-impl Command for SHR {
-    fn num() -> BaseElement {
-        BaseElement::new(8)
-    }
-    
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        // Проверяем, что SHR выполнен правильно для бита idx в B1
-        // next_frame[B1[idx]] должно быть равно current_frame[B1[idx + 1]] для idx < 31
-        // next_frame[B1[31]] должно быть равно 0 (старший бит становится 0)
+impl SHR {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize) -> E {
         let b1_next = next_frame[B1[idx]];
-        
-        // Определяем ожидаемое значение после сдвига вправо
         let expected_value = if idx == 31 {
-            E::from(BaseElement::new(0)) // Старший бит становится 0
+            E::from(BaseElement::new(0))
         } else {
-            current_frame[B1[idx + 1]] // Остальные биты сдвигаются вправо
+            current_frame[B1[idx + 1]]
         };
         
         b1_next - expected_value
     }
+}
+
+impl Command for SHR {
+    fn num() -> BaseElement {
+        BaseElement::new(6)
+    }
     
-    fn prove(state: &mut [BaseElement], _: usize) {
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        let flag = periodic_values[PERIODIC_SHR_COLUMNS_INDICES[0]];
+        
+        // Обрабатываем SHR transitions
+        for i in 0..SHR_TRANSITIONS_LEN {
+            let constraint_value = SHR::eval_single_transition(current_frame, next_frame, i);
+            transitions.agg_constraint(SHR_TRANSITIONS_INDICES[i], flag, constraint_value);
+        }
+    }
+    
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], _: usize) {
         // Выполняем сдвиг вправо (деление на 2) для B1, результат сохраняем в B1
-        shr_bit_registers(state);
+        shr_bit_registers(final_state);
     }
 }
 
-pub struct ADD;
+pub struct AddStep1;
 
-impl Command for ADD {
+impl Command for AddStep1 {
+    fn num() -> BaseElement {
+        BaseElement::new(7)
+    }
+    
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        let flag = periodic_values[PERIODIC_ADD_1_COLUMNS_INDICES[0]];
+        let two = E::from(BaseElement::new(2));
+        let mut p = E::from(BaseElement::new(1));
+        let mut in_register = E::from(BaseElement::new(0));
+        for i in 0..B1.len()-1 {
+            in_register += current_frame[B1[i]] * p;
+            p = two * p;
+        }
+        transitions.agg_constraint(ADD_1_TRANSITIONS_INDICES[0], flag, in_register - current_frame[REGISTERS_INDICES[10]]);
+        
+        p = E::from(BaseElement::new(1));
+        in_register = E::from(BaseElement::new(0));
+        for i in 0..B1.len()-1 {
+            in_register += next_frame[B1[i]] * p;
+            p = two * p;
+        }
+        transitions.agg_constraint(ADD_1_TRANSITIONS_INDICES[1], flag, in_register - current_frame[REGISTERS_INDICES[11]]);
+        transitions.agg_constraint(ADD_1_TRANSITIONS_INDICES[2], flag, next_frame[REGISTERS_INDICES[10]] - (current_frame[REGISTERS_INDICES[10]] + current_frame[REGISTERS_INDICES[11]]));
+        transitions.agg_constraint(ADD_1_TRANSITIONS_INDICES[3], flag, are_equal(next_frame[REGISTERS_INDICES[11]], current_frame[B1[B1.len() - 1]] + next_frame[B1[B1.len() - 1]] - E::from(BaseElement::new(2)) * current_frame[B1[B1.len() - 1]] * next_frame[B1[B1.len() - 1]]));
+    }
+    
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], _: usize) {
+        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[REGISTERS_INDICES[10]]) as u64 + element_to_u32(initial_state[REGISTERS_INDICES[11]]) as u64) as u64);
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new((element_to_u32(initial_state[B1[BIT_REGISTERS_LEN - 1]]) ^ element_to_u32(final_state[B1[BIT_REGISTERS_LEN - 1]])) as u64);    
+    }
+}
+
+pub struct AddStep2;
+
+impl Command for AddStep2 {
+    fn num() -> BaseElement {
+        BaseElement::new(8)
+    }
+    
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], current_frame: &[E], next_frame: &[E], periodic_values: &[E]) {
+        for i in 0..PERIODIC_ADD_2_COLUMNS_LEN {
+            let flag = periodic_values[PERIODIC_ADD_2_COLUMNS_INDICES[i]];
+            let two = E::from(BaseElement::new(2));
+            let mut p = E::from(BaseElement::new(1));
+            let mut in_register = E::from(BaseElement::new(0));
+            for i in 0..B1.len()-1 {
+                in_register += next_frame[B1[i]] * p;
+                p = two * p;
+            }
+            transitions.agg_constraint(ADD_2_TRANSITIONS_INDICES[0], flag, in_register - next_frame[REGISTERS_INDICES[10]]);
+
+            transitions.agg_constraint(ADD_2_TRANSITIONS_INDICES[1], flag, are_equal(next_frame[REGISTERS_INDICES[11]],E::from(BaseElement::new(1 << 31)) * (next_frame[B1[B1.len() - 1]] + current_frame[REGISTERS_INDICES[11]] - E::from(BaseElement::new(2)) * current_frame[REGISTERS_INDICES[11]] * next_frame[B1[B1.len() - 1]])));
+
+            transitions.agg_constraint(ADD_2_TRANSITIONS_INDICES[2 + i], flag, are_equal(next_frame[REGISTERS_INDICES[i]], next_frame[REGISTERS_INDICES[10]] + next_frame[REGISTERS_INDICES[11]]));
+        }
+    }
+    
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[REGISTERS_INDICES[10]]) & ((1u32 << 31) - 1)) as u64);
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new(((element_to_u32(final_state[B1[BIT_REGISTERS_LEN - 1]]) ^ element_to_u32(initial_state[REGISTERS_INDICES[11]])) << 31) as u64);
+        final_state[idx] = final_state[REGISTERS_INDICES[10]] + final_state[REGISTERS_INDICES[11]]; 
+    }
+}
+
+pub struct SetB;
+
+impl SetB {
+    fn eval_single_transition<E: FieldElement + From<BaseElement>>(next_frame: &[E], periodic_values: &[E]) -> E {
+        let two = E::from(BaseElement::new(2));
+        let mut p = E::from(BaseElement::new(1));
+        let mut in_register = E::from(BaseElement::new(0));
+        for i in B1 {
+            in_register += next_frame[i] * p;
+            p = two * p;
+        }
+        in_register - periodic_values[0]
+    }
+}
+
+
+impl Command for SetB {
     fn num() -> BaseElement {
         BaseElement::new(9)
     }
     
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(current_frame: &[E], next_frame: &[E], idx: usize, _: &[E]) -> E {
-        // Проверяем, что ADD выполнен правильно для бита idx в B1
-        // next_frame[B1[idx]] должно быть равно результату сложения B1[idx] + B2[idx] + carry
-        let b1_current = current_frame[B1[idx]];
-        let b2_current = current_frame[B2[idx]];
-        let b1_next = next_frame[B1[idx]];
- 
-        if idx == 0 {
-            b1_next - (b1_current + b2_current - E::from(BaseElement::new(2)) * b1_current * b2_current)
-        } else {
-            let b1_lower = current_frame[B1[idx - 1]];
-            let b2_lower = current_frame[B2[idx - 1]];
-            let b1_next_lower = next_frame[B1[idx - 1]];
-            let carry_bit = b1_lower * b2_lower + (E::ONE - b1_lower) * b2_lower * (E::ONE - b1_next_lower) + b1_lower * (E::ONE - b2_lower) * (E::ONE - b1_next_lower);
-            let mut sum_result = b1_current + b2_current - E::from(BaseElement::new(2)) * b1_current * b2_current;
-            sum_result = sum_result + carry_bit - E::from(BaseElement::new(2)) * sum_result * carry_bit;
-            b1_next - sum_result
-        }
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(transitions: &mut [E], _: &[E], next_frame: &[E], periodic_values: &[E]) {
+        let flag = periodic_values[PERIODIC_SETB2_COLUMNS_INDICES[0]];
+    
+        let constraint_value = SetB::eval_single_transition(next_frame, periodic_values);
+        transitions.agg_constraint(SETB2_TRANSITIONS_INDICES[0], flag, constraint_value);
     }
     
-    fn prove(state: &mut [BaseElement], _: usize) {
-        // Выполняем сложение B1 + B2 по модулю 2^32, результат сохраняем в B1
-        add_bit_registers(state);
-    }
-}
-
-pub struct SetB2;
-
-impl Command for SetB2 {
-    fn num() -> BaseElement {
-        BaseElement::new(10)
-    }
-    
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &[E], next_frame: &[E], _: usize, periodic_values: &[E]) -> E {
-        let two = E::from(BaseElement::new(2));
-        let mut p = E::from(BaseElement::new(1));
-        let mut in_register = E::from(BaseElement::new(0));
-        for i in B2 {
-            in_register += next_frame[i] * p;
-            p = two * p;
-        }
-        in_register - periodic_values[1]
-    }
-    
-    fn prove(state: &mut [BaseElement], value: usize) {
-        // Получаем значение из параметра value и устанавливаем его в B2
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], value: usize) {
         let base_element_value = BaseElement::new(value as u64);
-        set_to_bit_register_b2(state, base_element_value);
+        set_to_bit_register(final_state, base_element_value, B1);
     }
 }
 
@@ -299,16 +355,13 @@ pub struct NOP;
 
 impl Command for NOP {
     fn num() -> BaseElement {
-        BaseElement::new(11)
+        BaseElement::new(10)
     }
     
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &[E], _: &[E], _: usize, _: &[E]) -> E {
-        // NOP ничего не делает - просто проверяем, что все ячейки остались неизменными
-        E::ZERO
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &mut[E], _: &[E], _: &[E], _: &[E]) {
     }
     
-    fn prove(_: &mut [BaseElement], _: usize) {
-        // NOP ничего не делает - состояние остается неизменным
+    fn prove(_: &[BaseElement], _: &mut [BaseElement], _: usize) {
     }
 }
 
@@ -316,20 +369,61 @@ pub struct ResetHardMemory;
 
 impl Command for ResetHardMemory {
     fn num() -> BaseElement {
+        BaseElement::new(11)
+    }
+    
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &mut[E], _: &[E], _: &[E], _: &[E]) {
+    }
+    
+    fn prove(_: &[BaseElement], _: &mut [BaseElement], _: usize) {
+    }
+}
+
+pub struct SetR10;
+
+impl Command for SetR10 {
+    fn num() -> BaseElement {
         BaseElement::new(12)
     }
     
-    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &[E], _: &[E], _: usize, _: &[E]) -> E {
-        // ResetHardMemory отключает ограничения копирования для hard memory
-        // Не накладывает никаких ограничений - hard memory может изменяться свободно
-        E::ZERO
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &mut[E], _: &[E], _: &[E], _: &[E]) {
     }
     
-    fn prove(_: &mut [BaseElement], _: usize) {
-        // ResetHardMemory отключает ограничения копирования для hard memory
-        // Не изменяет состояние - hard memory может изменяться свободно
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[idx]) & ((1u32 << 31) - 1)) as u64);
     }
 }
+
+pub struct SetR11;
+
+impl Command for SetR11 {
+    fn num() -> BaseElement {
+        BaseElement::new(13)
+    }
+    
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &mut[E], _: &[E], _: &[E], _: &[E]) {
+    }
+    
+    fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new((element_to_u32(initial_state[idx]) & ((1u32 << 31) - 1)) as u64);
+    }
+}
+
+pub struct SetR11Value;
+
+impl Command for SetR11Value {
+    fn num() -> BaseElement {
+        BaseElement::new(14)
+    }
+    
+    fn eval_transitions<E: FieldElement + From<BaseElement>>(_: &mut[E], _: &[E], _: &[E], _: &[E]) {
+    }
+    
+    fn prove(_: &[BaseElement], final_state: &mut [BaseElement], value: usize) {
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new((value as u32 & ((1u32 << 31) - 1)) as u64);
+    }
+}
+
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -352,267 +446,345 @@ const K: [u32; 64] = [
 
 pub const PROGRAM_LEN: usize = 8192;
 
-fn sample_program() -> Vec<[BaseElement; 2]> {
+fn create_tmp_iv() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(1)],
-        [XOR::num(), BaseElement::new(0)],
-        [AND::num(), BaseElement::new(0)],
-        [OR::num(), BaseElement::new(0)],
-        [NOT::num(), BaseElement::new(0)],
-        [ROR::num(), BaseElement::new(2)],
-        [SHR::num(), BaseElement::new(0)],
-        [ADD::num(), BaseElement::new(0)],
-        [SetB2::num(), BaseElement::new(155)],
-        [NOP::num(), BaseElement::new(0)],
-        [ResetHardMemory::num(), BaseElement::new(0)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]], // tmp_h[0]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]], // tmp_h[1]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)]], // tmp_h[2]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)]], // tmp_h[3]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]], // tmp_h[4]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)]], // tmp_h[5]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)]], // tmp_h[6]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)]]  // tmp_h[7]
     ]
 }
 
-fn create_tmp_iv() -> Vec<[BaseElement; 2]> {
+// Set s1 to r8 register
+fn calc_s1() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)], // tmp_h[0]
-        [ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)], // tmp_h[1]
-        [ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)], // tmp_h[2]
-        [ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)], // tmp_h[3]
-        [ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)], // tmp_h[4]
-        [ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)], // tmp_h[5]
-        [ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)], // tmp_h[6]
-        [ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)], // tmp_h[7]
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ROR::num(), BaseElement::new(6)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ROR::num(), BaseElement::new(11)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ROR::num(), BaseElement::new(25)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
     ]
 }
 
-// Set s1 to 80 register
-fn calc_s1() -> Vec<[BaseElement; 2]> {
+// Set ch to r9 register
+fn calc_ch() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ROR::num(), BaseElement::new(6)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ROR::num(), BaseElement::new(11)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ROR::num(), BaseElement::new(25)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[NOT::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
     ]
 }
 
-// Set ch to 81 register
-fn calc_ch() -> Vec<[BaseElement; 2]> {
+// Set temp1 to r8 register
+fn calc_temp1(i: usize) -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
-        [AND::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
-        [NOT::num(), BaseElement::new(0)],
-        [AND::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR11Value::num(), BaseElement::new(K[i] as u64)]],
+        vec![[SetB::num(), BaseElement::new(K[i] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR11::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
     ]
 }
 
-// Set temp1 to 80 register
-fn calc_temp1(i: usize) -> Vec<[BaseElement; 2]> {
+// Set s0 to r9 register
+fn calc_s0() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [SetB2::num(), BaseElement::new(K[i] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ROR::num(), BaseElement::new(2)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ROR::num(), BaseElement::new(13)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ROR::num(), BaseElement::new(22)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
     ]
 }
 
-// Set s0 to 81 register
-fn calc_s0() -> Vec<[BaseElement; 2]> {
+// Set maj to r10 register
+fn calc_maj() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [ROR::num(), BaseElement::new(2)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [ROR::num(), BaseElement::new(13)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)], 
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [ROR::num(), BaseElement::new(22)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
     ]
 }
 
-// Set maj to 82 register
-fn calc_maj() -> Vec<[BaseElement; 2]> {
+// Set temp2 to r9 register
+fn calc_temp2() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-        [AND::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-        [AND::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-        [AND::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
     ]
 }
 
-// Set temp2 to 81 register
-fn calc_temp2() -> Vec<[BaseElement; 2]> {
-    vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-    ]
-}
-
-fn update_w_i(i: usize) -> Vec<[BaseElement; 2]> {
+fn update_w_i(i: usize) -> Vec<Vec<[BaseElement; 2]>> {
     /*
         let s0 = (w[i - 15].rotate_right(7)) ^ (w[i - 15].rotate_right(18)) ^ (w[i - 15] >> 3);
         let s1 = (w[i - 2].rotate_right(17)) ^ (w[i - 2].rotate_right(19)) ^ (w[i - 2] >> 10);
         w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
     */
     vec![
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)],
-        [ROR::num(), BaseElement::new(7)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)],
-        [ROR::num(), BaseElement::new(18)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)], // save s0 to r0
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)]],
+        vec![[ROR::num(), BaseElement::new(7)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)]],
+        vec![[ROR::num(), BaseElement::new(18)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]], // save s0 to r8
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)]],
+        vec![[ROR::num(), BaseElement::new(17)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)]],
+        vec![[ROR::num(), BaseElement::new(19)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[SHR::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],// save s1 to r9
+        
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
+             [SetR10::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
 
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)],
-        [ROR::num(), BaseElement::new(17)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)],
-        [ROR::num(), BaseElement::new(19)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [SHR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-        [XOR::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)], // save s1 to r1
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u64)],
+             [SetR10::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
 
-        [ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)]],
     ]
 }
 
-fn update_tmp_h() -> Vec<[BaseElement; 2]> {
+fn update_tmp_h() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-        [ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
     ]
 }
 
-fn update_h() -> Vec<[BaseElement; 2]> {
+fn update_h() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        [ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
-        [ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
-        [ToBin2::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
-        [ADD::num(), BaseElement::new(0)],
-        [FromBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[0] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[0] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[1] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[1] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[2] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[2] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[3] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[3] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[4] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[4] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[5] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[5] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[6] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[6] as u64)]],
+
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[7] as u64)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
+             [AddStep1::num(), BaseElement::new(0)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[7] as u64)]],
     ]
 }
 
-fn hash_one_round(i: usize) -> Vec<[BaseElement; 2]> {
+fn hash_one_round(i: usize) -> Vec<Vec<[BaseElement; 2]>> {
     let mut program = Vec::new();
     program.extend(calc_s1());
     program.extend(calc_ch());
@@ -624,9 +796,9 @@ fn hash_one_round(i: usize) -> Vec<[BaseElement; 2]> {
     program
 }
 
-pub fn get_program() -> Vec<[BaseElement; 2]> {
+pub fn get_program() -> Vec<Vec<[BaseElement; 2]>> {
     let mut program = Vec::new();
-    program.extend(vec![[NOP::num(), BaseElement::new(0)]; 1]);
+    program.push(vec![[NOP::num(), BaseElement::new(0)]]);
     // program.extend(sample_program());
     program.extend(create_tmp_iv());
     for i in 0..64 {
@@ -637,6 +809,10 @@ pub fn get_program() -> Vec<[BaseElement; 2]> {
     }
     program.extend(update_h());
     println!("initial program.len() = {}", program.len());
-    program.extend(vec![[ResetHardMemory::num(), BaseElement::new(0)]; program.len().next_power_of_two() - program.len()]);
+    let padding_len = program.len().next_power_of_two() - program.len();
+    for _ in 0..padding_len {
+        program.push(vec![[ResetHardMemory::num(), BaseElement::new(0)]]);
+    }
     program
 }
+

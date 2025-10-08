@@ -1,93 +1,7 @@
-use std::iter::zip;
-
 use crate::experiment_sha::utis::element_to_u32;
+use crate::experiment_sha::table_constants::*;
 
 use super::BaseElement;
-
-/* 
-Table structure
-
-00..15  columns - array of w    // hard memory
-16..23  columns - iv            // ram
-24..35  columns - tmp variables // registers
-36..99 columns - bitregistres  // bit registers
-
-*/
-
-pub const HARD_MEMORY_LEN: usize = 16;
-pub const HARD_MEMORY_START: usize = 0;
-
-pub const HARD_MEMORY_INDICES: [usize; HARD_MEMORY_LEN] = {
-    let mut indices = [0; HARD_MEMORY_LEN];
-    let mut i = 0;
-    while i < HARD_MEMORY_LEN {
-        indices[i] = i;
-        i += 1;
-    }
-    indices
-};
-
-pub const IV_LEN: usize = 8;
-pub const IV_START: usize = HARD_MEMORY_START + HARD_MEMORY_LEN;
-
-pub const IV_INDICES: [usize; IV_LEN] = {
-    let mut indices = [0; IV_LEN];
-    let mut i = 0;
-    while i < IV_LEN {
-        indices[i] = IV_START + i;
-        i += 1;
-    }
-    indices
-};
-
-pub const REGISTERS_COUNT: usize = 12;
-pub const REGISTERS_SIZE: usize = 1;
-pub const REGISTERS_LEN: usize = REGISTERS_COUNT * REGISTERS_SIZE;
-pub const REGISTERS_START: usize = IV_START + IV_LEN;
-
-pub const REGISTERS_INDICES: [usize; REGISTERS_LEN] = {
-    let mut indices = [0; REGISTERS_LEN];
-    let mut i = 0;
-    while i < REGISTERS_LEN {
-        indices[i] = REGISTERS_START + i;
-        i += 1;
-    }
-    indices
-};
-
-pub const VARIABLES_COUNT: usize = REGISTERS_START + REGISTERS_LEN;
-
-pub const BIT_REGISTERS_COUNT: usize = 2;
-pub const BIT_REGISTERS_SIZE: usize = 32;
-pub const BIT_REGISTERS_LEN: usize = BIT_REGISTERS_COUNT * BIT_REGISTERS_SIZE;
-pub const BIT_REGISTERS_START: usize = REGISTERS_START + REGISTERS_LEN;
-
-pub const B1: [usize; BIT_REGISTERS_SIZE] = {
-    let mut indices = [0; BIT_REGISTERS_SIZE];
-    let mut i = 0;
-    while i < BIT_REGISTERS_SIZE {
-        indices[i] = BIT_REGISTERS_START + BIT_REGISTERS_SIZE * 0 + i;
-        i += 1;
-    }
-    indices
-};
-
-pub const B2: [usize; BIT_REGISTERS_SIZE] = {
-    let mut indices = [0; BIT_REGISTERS_SIZE];
-    let mut i = 0;
-    while i < BIT_REGISTERS_SIZE {
-        indices[i] = BIT_REGISTERS_START + BIT_REGISTERS_SIZE * 1 + i;
-        i += 1;
-    }
-    indices
-};
-
-pub const VM_COLUMNS: usize = BIT_REGISTERS_START + BIT_REGISTERS_LEN;
-
-pub const TABLE_WIDTH: usize = VM_COLUMNS;
-
-pub const INPUT_STRING_LENGTH: usize = 64;
-pub const INPUT_BASE_ELEMENTS: usize = INPUT_STRING_LENGTH / 4;
 
 pub fn set_to_bit_register(state: &mut [BaseElement], u: BaseElement, b: [usize; BIT_REGISTERS_SIZE]) {
     let mut a = element_to_u32(u);
@@ -97,9 +11,6 @@ pub fn set_to_bit_register(state: &mut [BaseElement], u: BaseElement, b: [usize;
     }
 }
 
-pub fn set_to_bit_register_b2(state: &mut [BaseElement], u: BaseElement) {
-    set_to_bit_register(state, u, B2);
-}
 
 pub fn set_from_bit_register(state: &mut [BaseElement], u: usize, b: [usize; BIT_REGISTERS_SIZE]) {
     let two = BaseElement::new(2);
@@ -112,22 +23,26 @@ pub fn set_from_bit_register(state: &mut [BaseElement], u: usize, b: [usize; BIT
     state[u] = in_register;
 }
 
-pub fn xor_bit_registers(state: &mut [BaseElement]) {
-    for i in zip(B1, B2) {
-        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) ^ element_to_u32(state[i.1])) as u64);
+pub fn xor_bit_registers(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+    let two = BaseElement::new(2);
+    let mut p = BaseElement::new(1);
+    let mut in_register = BaseElement::new(0);
+    for i in B1 {
+        in_register += BaseElement::new((element_to_u32(initial_state[i]) ^ element_to_u32(final_state[i])) as u64) * p;
+        p = two * p;
     }
+    final_state[idx] = in_register;
 }
 
-pub fn and_bit_registers(state: &mut [BaseElement]) {
-    for i in zip(B1, B2) {
-        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) & element_to_u32(state[i.1])) as u64);
+pub fn and_bit_registers(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
+    let two = BaseElement::new(2);
+    let mut p = BaseElement::new(1);
+    let mut in_register = BaseElement::new(0);
+    for i in B1 {
+        in_register += BaseElement::new((element_to_u32(initial_state[i]) & element_to_u32(final_state[i])) as u64) * p;
+        p = two * p;
     }
-}
-
-pub fn or_bit_registers(state: &mut [BaseElement]) {
-    for i in zip(B1, B2) {
-        state[i.0] = BaseElement::new((element_to_u32(state[i.0]) | element_to_u32(state[i.1])) as u64);
-    }
+    final_state[idx] = in_register;
 }
 
 pub fn not_bit_registers(state: &mut [BaseElement]) {
@@ -174,38 +89,6 @@ pub fn shr_bit_registers(state: &mut [BaseElement]) {
     // Записываем результат обратно в B1
     for (i, &idx) in B1.iter().enumerate() {
         state[idx] = BaseElement::new(bits[i] as u64);
-    }
-}
-
-pub fn add_bit_registers(state: &mut [BaseElement]) {
-    // Сложение B1 + B2 по модулю 2^32, результат в B1
-    let mut b1_bits = [0u32; BIT_REGISTERS_SIZE];
-    let mut b2_bits = [0u32; BIT_REGISTERS_SIZE];
-    
-    // Читаем все биты из B1 и B2
-    for (i, &idx) in B1.iter().enumerate() {
-        b1_bits[i] = element_to_u32(state[idx]);
-    }
-    for (i, &idx) in B2.iter().enumerate() {
-        b2_bits[i] = element_to_u32(state[idx]);
-    }
-    
-    // Преобразуем биты в u32 числа
-    let mut b1_value = 0u32;
-    let mut b2_value = 0u32;
-    
-    for i in 0..BIT_REGISTERS_SIZE {
-        b1_value |= b1_bits[i] << i;
-        b2_value |= b2_bits[i] << i;
-    }
-    
-    // Выполняем сложение по модулю 2^32
-    let result = b1_value.wrapping_add(b2_value);
-    
-    // Разбиваем результат обратно на биты и записываем в B1
-    for (i, &idx) in B1.iter().enumerate() {
-        let bit = (result >> i) & 1;
-        state[idx] = BaseElement::new(bit as u64);
     }
 }
 

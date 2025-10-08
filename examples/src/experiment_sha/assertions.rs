@@ -1,6 +1,6 @@
 use winterfell::Assertion;
 
-use crate::experiment_sha::{table::IV_INDICES, utis::get_iv, vm_program::PROGRAM_LEN};
+use crate::experiment_sha::{table_constants::IV_INDICES, utis::get_iv, vm_program::PROGRAM_LEN};
 
 use super::BaseElement;
 

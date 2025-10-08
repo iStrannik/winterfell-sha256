@@ -7,8 +7,11 @@ use winterfell::{
     crypto::MerkleTree, matrix::ColMatrix, AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable
 };
 
-use crate::experiment_sha::{air::PublicInputs, table::{set_iv, INPUT_BASE_ELEMENTS, IV_INDICES}, utis::{element_to_u32, extract_hash, get_iv}, vm_program::{get_program, Command, FromBin, SetB2, ToBin, ToBin2, ADD, AND, NOP, NOT, OR, PROGRAM_LEN, ROR, SHR, XOR, ResetHardMemory}};
-use crate::experiment_sha::table::TABLE_WIDTH;
+use crate::experiment_sha::table_constants::{INPUT_BASE_ELEMENTS, IV_INDICES};
+
+use crate::experiment_sha::vm_program::{AddStep1, AddStep2, SetR10, SetR11, SetR11Value};
+use crate::experiment_sha::{air::PublicInputs, table::set_iv, utis::{element_to_u32, extract_hash, get_iv}, vm_program::{get_program, Command, FromBin, SetB, ToBin, AND, NOP, NOT, PROGRAM_LEN, ROR, SHR, XOR, ResetHardMemory}};
+use crate::experiment_sha::table_constants::TABLE_WIDTH;
 
 use super::{
     BaseElement, DefaultRandomCoin, ElementHasher, ExperimentShaAir, FieldElement, PhantomData,
@@ -57,41 +60,49 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
                         state[i] = input_data.data[(step + 1) / program.len()][i];
                     }
                 } else {
-                    let command = program[step % program.len()][0];
-                    let b1 = program[step % program.len()][1];
-                    if ToBin::num() == command {
-                        ToBin::prove(state, element_to_u32(b1) as usize);
-                    } else if ToBin2::num() == command {
-                        ToBin2::prove(state, element_to_u32(b1) as usize);
-                    } else if FromBin::num() == command {
-                        FromBin::prove(state, element_to_u32(b1) as usize);
-                        /*
-                        if b1 == BaseElement::new(0) {
-                            println!("w[0] = {:x}", element_to_u32(state[0]));
+                    let mut initial_state = vec![BaseElement::new(0); state.len()];
+                    for i in 0..state.len() {
+                        initial_state[i] = state[i];
+                    }
+                    for [command, b1] in program[step % program.len()].clone() {
+                        if ToBin::num() == command {
+                            ToBin::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if FromBin::num() == command {
+                            FromBin::prove(&initial_state, state, element_to_u32(b1) as usize);
+                            /*
+                            if b1 == BaseElement::new(0) {
+                                println!("w[0] = {:x}", element_to_u32(state[0]));
+                            }
+                            */
+                        } else if XOR::num() == command {
+                            XOR::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if AND::num() == command {
+                            AND::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if NOT::num() == command {
+                            NOT::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if ROR::num() == command {
+                            ROR::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if SHR::num() == command {
+                            SHR::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if AddStep1::num() == command {
+                            AddStep1::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if AddStep2::num() == command {
+                            AddStep2::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if SetB::num() == command {
+                            SetB::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if NOP::num() == command {
+                            NOP::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if ResetHardMemory::num() == command {
+                            ResetHardMemory::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if SetR10::num() == command {
+                            SetR10::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if SetR11::num() == command {
+                            SetR11::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else if SetR11Value::num() == command {
+                            SetR11Value::prove(&initial_state, state, element_to_u32(b1) as usize);
+                        } else {
+                            todo!();
                         }
-                        */
-                    } else if XOR::num() == command {
-                        XOR::prove(state, element_to_u32(b1) as usize);
-                    } else if AND::num() == command {
-                        AND::prove(state, element_to_u32(b1) as usize);
-                    } else if OR::num() == command {
-                        OR::prove(state, element_to_u32(b1) as usize);
-                    } else if NOT::num() == command {
-                        NOT::prove(state, element_to_u32(b1) as usize);
-                    } else if ROR::num() == command {
-                        ROR::prove(state, element_to_u32(b1) as usize);
-                    } else if SHR::num() == command {
-                        SHR::prove(state, element_to_u32(b1) as usize);
-                    } else if ADD::num() == command {
-                        ADD::prove(state, element_to_u32(b1) as usize);
-                    } else if SetB2::num() == command {
-                        SetB2::prove(state, element_to_u32(b1) as usize);
-                    } else if NOP::num() == command {
-                        NOP::prove(state, element_to_u32(b1) as usize);
-                    } else if ResetHardMemory::num() == command {
-                        ResetHardMemory::prove(state, element_to_u32(b1) as usize);
-                    } else {
-                        todo!();
                     }
                     if step == program.len() * input_data.data.len() - 2 {
                         println!("Proof result is sha256(input_string) = {}", hex::encode(extract_hash(state)));

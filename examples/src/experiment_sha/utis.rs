@@ -1,4 +1,4 @@
-use crate::experiment_sha::table::IV_INDICES;
+use crate::experiment_sha::table_constants::IV_INDICES;
 
 use super::BaseElement;
 use super::FieldElement;
