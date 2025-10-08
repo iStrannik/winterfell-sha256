@@ -17,7 +17,7 @@ use crate::{experiment_sha::{air::PublicInputs, table_constants::TABLE_WIDTH, ut
 mod air;
 mod assertions;
 use air::ExperimentShaAir;
-mod table_constants;
+pub mod table_constants;
 mod transitions_constants;
 mod transitions;
 mod utis;

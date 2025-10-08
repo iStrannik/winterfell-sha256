@@ -1,8 +1,3 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
-//
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
-
 use std::collections::HashMap;
 
 use csv::Writer;
@@ -204,7 +199,7 @@ impl ProofSizeBenchmark {
 
     /// Бенчмарк для string length
     fn benchmark_string_length(&self) -> Result<Vec<BenchmarkResult>, Box<dyn std::error::Error>> {
-        let string_length_values = vec![110, 240, 480, 1000, 2030];
+        let string_length_values = vec![110, 240, 480, 1000, 2030, 4050, 8150, 16350, 32700];
         let mut results = Vec::new();
 
         for &string_length in &string_length_values {
@@ -319,7 +314,11 @@ impl ProofSizeBenchmark {
         results: &[&BenchmarkResult],
         output_dir: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let filename = format!("{}/{}_vs_proof_size.png", output_dir, param_name);
+        // Создаем подпапку с количеством колонок
+        let subdir = format!("{}/columns_{}", output_dir, experiment_sha::table_constants::TABLE_WIDTH);
+        std::fs::create_dir_all(&subdir)?;
+        
+        let filename = format!("{}/{}_vs_proof_size.png", subdir, param_name);
         let root = BitMapBackend::new(&filename, (800, 600)).into_drawing_area();
         root.fill(&WHITE)?;
 
