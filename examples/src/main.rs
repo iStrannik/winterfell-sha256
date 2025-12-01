@@ -8,6 +8,7 @@ use std::time::Instant;
 use examples::{experiment_sha, fibonacci, rescue, vdf, ExampleOptions, ExampleType};
 #[cfg(feature = "std")]
 use examples::{lamport, merkle, rescue_raps};
+use examples::proof_decomposition::ProofDecomposition;
 use examples::proof_size_benchmark::ProofSizeBenchmark;
 use structopt::StructOpt;
 use tracing::info_span;
@@ -132,6 +133,14 @@ fn main() {
 
     let proof_bytes = proof.to_bytes();
     println!("Proof size: {:.1} KB", proof_bytes.len() as f64 / 1024f64);
+    
+    // Анализ структуры доказательства
+    println!("\n=====================");
+    println!("АНАЛИЗ СТРУКТУРЫ ДОКАЗАТЕЛЬСТВА");
+    println!("=====================");
+    let decomposition = ProofDecomposition::analyze(&proof);
+    decomposition.print_report();
+    
     let conjectured_security_level = options.get_proof_security_level_conjectured(&proof);
 
     #[cfg(feature = "std")]

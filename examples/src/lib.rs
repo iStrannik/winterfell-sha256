@@ -16,6 +16,7 @@ pub mod fibonacci;
 pub mod lamport;
 #[cfg(feature = "std")]
 pub mod merkle;
+pub mod proof_decomposition;
 pub mod proof_size_benchmark;
 pub mod rescue;
 #[cfg(feature = "std")]
