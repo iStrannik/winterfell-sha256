@@ -8,11 +8,11 @@ use core::marker::PhantomData;
 use tracing::{field, info_span};
 use winterfell::{
     crypto::{DefaultRandomCoin, ElementHasher, MerkleTree},
-    math::{fields::f64::BaseElement, FieldElement},
+    math::{fields::f128::BaseElement, FieldElement},
     Proof, ProofOptions, Prover, Trace, VerifierError,
 };
 
-use crate::{experiment_sha::{air::PublicInputs, table_constants::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block}}, Blake3_192F64, Blake3_256F64, Example, ExampleOptions, HashFunction, Sha3_256F64};
+use crate::{experiment_sha::{air::PublicInputs, table_constants::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block}}, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
 
 mod air;
 mod assertions;
@@ -166,13 +166,13 @@ pub fn get_example(
 
     match hash_fn {
         HashFunction::Blake3_192 => {
-            Ok(Box::new(ExperimentShaExample::<Blake3_192F64>::new(string_length, options)))
+            Ok(Box::new(ExperimentShaExample::<Blake3_192>::new(string_length, options)))
         },
         HashFunction::Blake3_256 => {
-            Ok(Box::new(ExperimentShaExample::<Blake3_256F64>::new(string_length, options)))
+            Ok(Box::new(ExperimentShaExample::<Blake3_256>::new(string_length, options)))
         },
         HashFunction::Sha3_256 => {
-            Ok(Box::new(ExperimentShaExample::<Sha3_256F64>::new(string_length, options)))
+            Ok(Box::new(ExperimentShaExample::<Sha3_256>::new(string_length, options)))
         },
         _ => Err("The specified hash function cannot be used with this example.".to_string()),
     }

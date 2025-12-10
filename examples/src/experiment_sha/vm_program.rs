@@ -280,8 +280,8 @@ impl Command for AddStep1 {
     }
     
     fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], _: usize) {
-        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[REGISTERS_INDICES[10]]) as u64 + element_to_u32(initial_state[REGISTERS_INDICES[11]]) as u64) as u64);
-        final_state[REGISTERS_INDICES[11]] = BaseElement::new((element_to_u32(initial_state[B1[BIT_REGISTERS_LEN - 1]]) ^ element_to_u32(final_state[B1[BIT_REGISTERS_LEN - 1]])) as u64);    
+        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[REGISTERS_INDICES[10]]) as u128 + element_to_u32(initial_state[REGISTERS_INDICES[11]]) as u128) as u128);
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new((element_to_u32(initial_state[B1[BIT_REGISTERS_LEN - 1]]) ^ element_to_u32(final_state[B1[BIT_REGISTERS_LEN - 1]])) as u128);    
     }
 }
 
@@ -311,8 +311,8 @@ impl Command for AddStep2 {
     }
     
     fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
-        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[REGISTERS_INDICES[10]]) & ((1u32 << 31) - 1)) as u64);
-        final_state[REGISTERS_INDICES[11]] = BaseElement::new(((element_to_u32(final_state[B1[BIT_REGISTERS_LEN - 1]]) ^ element_to_u32(initial_state[REGISTERS_INDICES[11]])) << 31) as u64);
+        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[REGISTERS_INDICES[10]]) & ((1u32 << 31) - 1)) as u128);
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new(((element_to_u32(final_state[B1[BIT_REGISTERS_LEN - 1]]) ^ element_to_u32(initial_state[REGISTERS_INDICES[11]])) << 31) as u128);
         final_state[idx] = final_state[REGISTERS_INDICES[10]] + final_state[REGISTERS_INDICES[11]]; 
     }
 }
@@ -346,7 +346,7 @@ impl Command for SetB {
     }
     
     fn prove(_: &[BaseElement], final_state: &mut [BaseElement], value: usize) {
-        let base_element_value = BaseElement::new(value as u64);
+        let base_element_value = BaseElement::new(value as u128);
         set_to_bit_register(final_state, base_element_value, B1);
     }
 }
@@ -390,7 +390,7 @@ impl Command for SetR10 {
     }
     
     fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
-        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[idx]) & ((1u32 << 31) - 1)) as u64);
+        final_state[REGISTERS_INDICES[10]] = BaseElement::new((element_to_u32(initial_state[idx]) & ((1u32 << 31) - 1)) as u128);
     }
 }
 
@@ -405,7 +405,7 @@ impl Command for SetR11 {
     }
     
     fn prove(initial_state: &[BaseElement], final_state: &mut [BaseElement], idx: usize) {
-        final_state[REGISTERS_INDICES[11]] = BaseElement::new((element_to_u32(initial_state[idx]) & ((1u32 << 31) - 1)) as u64);
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new((element_to_u32(initial_state[idx]) & ((1u32 << 31) - 1)) as u128);
     }
 }
 
@@ -420,7 +420,7 @@ impl Command for SetR11Value {
     }
     
     fn prove(_: &[BaseElement], final_state: &mut [BaseElement], value: usize) {
-        final_state[REGISTERS_INDICES[11]] = BaseElement::new((value as u32 & ((1u32 << 31) - 1)) as u64);
+        final_state[REGISTERS_INDICES[11]] = BaseElement::new((value as u32 & ((1u32 << 31) - 1)) as u128);
     }
 }
 
@@ -448,147 +448,147 @@ pub const PROGRAM_LEN: usize = 8192;
 
 fn create_tmp_iv() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]], // tmp_h[0]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]], // tmp_h[1]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)]], // tmp_h[2]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)]], // tmp_h[3]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]], // tmp_h[4]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)]], // tmp_h[5]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)]], // tmp_h[6]
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)]]  // tmp_h[7]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[0] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]], // tmp_h[0]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[1] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)]], // tmp_h[1]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[2] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)]], // tmp_h[2]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[3] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)]], // tmp_h[3]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[4] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]], // tmp_h[4]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[5] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)]], // tmp_h[5]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[6] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)]], // tmp_h[6]
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[7] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)]]  // tmp_h[7]
     ]
 }
 
 // Set s1 to r8 register
 fn calc_s1() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
         vec![[ROR::num(), BaseElement::new(6)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
         vec![[ROR::num(), BaseElement::new(11)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
         vec![[ROR::num(), BaseElement::new(25)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
     ]
 }
 
 // Set ch to r9 register
 fn calc_ch() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
-             [AND::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
         vec![[NOT::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
-             [AND::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
     ]
 }
 
 // Set temp1 to r8 register
 fn calc_temp1(i: usize) -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR11Value::num(), BaseElement::new(K[i] as u64)]],
-        vec![[SetB::num(), BaseElement::new(K[i] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR11Value::num(), BaseElement::new(K[i] as u128)]],
+        vec![[SetB::num(), BaseElement::new(K[i] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR11::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR11::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i % 16] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
     ]
 }
 
 // Set s0 to r9 register
 fn calc_s0() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
         vec![[ROR::num(), BaseElement::new(2)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
         vec![[ROR::num(), BaseElement::new(13)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
         vec![[ROR::num(), BaseElement::new(22)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
     ]
 }
 
 // Set maj to r10 register
 fn calc_maj() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-             [AND::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-             [AND::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-             [AND::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[11] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
+             [AND::num(), BaseElement::new(REGISTERS_INDICES[11] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[11] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
     ]
 }
 
 // Set temp2 to r9 register
 fn calc_temp2() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
     ]
 }
 
@@ -599,28 +599,28 @@ fn update_w_i(i: usize) -> Vec<Vec<[BaseElement; 2]>> {
         w[i] = w[i - 16].wrapping_add(s0).wrapping_add(w[i - 7]).wrapping_add(s1);
     */
     vec![
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u128)]],
         vec![[ROR::num(), BaseElement::new(7)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u128)]],
         vec![[ROR::num(), BaseElement::new(18)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 1) % 16] as u128)]],
         vec![[SHR::num(), BaseElement::new(0)]],
         vec![[SHR::num(), BaseElement::new(0)]],
         vec![[SHR::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]], // save s0 to r8
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]], // save s0 to r8
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u128)]],
         vec![[ROR::num(), BaseElement::new(17)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u128)]],
         vec![[ROR::num(), BaseElement::new(19)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u64)]],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 14) % 16] as u128)]],
         vec![[SHR::num(), BaseElement::new(0)]],
         vec![[SHR::num(), BaseElement::new(0)]],
         vec![[SHR::num(), BaseElement::new(0)]],
@@ -631,156 +631,156 @@ fn update_w_i(i: usize) -> Vec<Vec<[BaseElement; 2]>> {
         vec![[SHR::num(), BaseElement::new(0)]],
         vec![[SHR::num(), BaseElement::new(0)]],
         vec![[SHR::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],// save s1 to r9
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [XOR::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],// save s1 to r9
         
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
-             [SetR10::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u128)],
+             [SetR10::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u64)],
-             [SetR10::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        vec![[ToBin::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u128)],
+             [SetR10::num(), BaseElement::new(HARD_MEMORY_INDICES[(i + 9) % 16] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
         
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(HARD_MEMORY_INDICES[i] as u128)]],
     ]
 }
 
 fn update_tmp_h() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
         
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
-             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
+             [FromBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u64)],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR10::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[9] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
     ]
 }
 
 fn update_h() -> Vec<Vec<[BaseElement; 2]>> {
     vec![
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[0] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[0] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[0] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[0] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[0] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[0] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[0] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[1] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[1] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[1] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[1] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[1] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[1] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[1] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[2] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[2] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[2] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[2] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[2] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[2] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[2] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[3] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[3] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[3] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[3] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[3] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[3] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[3] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[4] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[4] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[4] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[4] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[4] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[4] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[4] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[5] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[5] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[5] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[5] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[5] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[5] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[5] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[6] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[6] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[6] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[6] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[6] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[6] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[6] as u128)]],
 
-        vec![[ToBin::num(), BaseElement::new(IV_INDICES[7] as u64)],
-             [SetR10::num(), BaseElement::new(IV_INDICES[7] as u64)],
-             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u64)],
+        vec![[ToBin::num(), BaseElement::new(IV_INDICES[7] as u128)],
+             [SetR10::num(), BaseElement::new(IV_INDICES[7] as u128)],
+             [SetR11::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[7] as u128)],
              [AddStep1::num(), BaseElement::new(0)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u64)],
-             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)]],
-        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u64)],
-             [FromBin::num(), BaseElement::new(IV_INDICES[7] as u64)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[10] as u128)],
+             [AddStep2::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)]],
+        vec![[ToBin::num(), BaseElement::new(REGISTERS_INDICES[8] as u128)],
+             [FromBin::num(), BaseElement::new(IV_INDICES[7] as u128)]],
     ]
 }
 
