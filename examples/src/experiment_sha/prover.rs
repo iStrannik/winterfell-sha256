@@ -3,10 +3,21 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
+use core::mem::size_of;
+
+use fri::FriOptions;
 use winterfell::{
-    crypto::MerkleTree, matrix::ColMatrix, AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable
+    crypto::MerkleTree,
+    matrix::ColMatrix,
+    AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients,
+    DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions,
+    StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable,
 };
 
+use crate::experiment_sha::fri_digest_stats::{
+    expected_fri_digest_per_layer, expected_merkle_batch_digest_uniform, FriDigestRunRecorder,
+    FriDigestStatsRow,
+};
 use crate::experiment_sha::table_constants::{INPUT_BASE_ELEMENTS, IV_INDICES};
 
 use crate::experiment_sha::vm_program::{AddStep1, AddStep2, SetR10, SetR11, SetR11Value};
@@ -26,11 +37,37 @@ use super::{
 pub struct ExperimentShaProver<H: ElementHasher> {
     options: ProofOptions,
     _hasher: PhantomData<H>,
+    fri_digest_recorder: Option<FriDigestRunRecorder>,
+    quiet_diagnostics: bool,
 }
 
 impl<H: ElementHasher> ExperimentShaProver<H> {
     pub fn new(options: ProofOptions) -> Self {
-        Self { options, _hasher: PhantomData }
+        Self {
+            options,
+            _hasher: PhantomData,
+            fri_digest_recorder: None,
+            quiet_diagnostics: false,
+        }
+    }
+
+    /// Collect FRI Merkle batch digest counts into `recorder` (typically with a shared `Arc` across runs).
+    /// When `quiet_diagnostics` is true, `println` diagnostics in trace hooks are suppressed.
+    pub fn new_with_fri_digest_recorder(
+        options: ProofOptions,
+        recorder: FriDigestRunRecorder,
+        quiet_diagnostics: bool,
+    ) -> Self {
+        Self {
+            options,
+            _hasher: PhantomData,
+            fri_digest_recorder: Some(recorder),
+            quiet_diagnostics,
+        }
+    }
+
+    fn log_diag(&self) -> bool {
+        !self.quiet_diagnostics
     }
 
     /// Builds an execution trace for computing a sequence of the specified length
@@ -38,7 +75,9 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
         let program = get_program();
         assert_eq!(program.len(), PROGRAM_LEN);
         assert_eq!(input_data.result.len(), 8);
-        println!("input_data.data.len() = {}", input_data.data.len());
+        if self.log_diag() {
+            println!("input_data.data.len() = {}", input_data.data.len());
+        }
         let mut trace = TraceTable::new(TABLE_WIDTH, program.len() * input_data.data.len());
         trace.fill(
             |state| {
@@ -104,8 +143,11 @@ impl<H: ElementHasher> ExperimentShaProver<H> {
                             todo!();
                         }
                     }
-                    if step == program.len() * input_data.data.len() - 2 {
-                        println!("Proof result is sha256(input_string) = {}", hex::encode(extract_hash(state)));
+                    if step == program.len() * input_data.data.len() - 2 && self.log_diag() {
+                        println!(
+                            "Proof result is sha256(input_string) = {}",
+                            hex::encode(extract_hash(state))
+                        );
                     }
                 }
             }
@@ -183,5 +225,111 @@ where
             domain,
             partition_options,
         )
+    }
+
+    fn on_query_positions_determined(
+        &self,
+        query_positions: &[usize],
+        lde_domain_size: usize,
+        fri_options: &FriOptions,
+    ) {
+        let q = query_positions.len();
+        let ff = fri_options.folding_factor();
+        let d = size_of::<H::Digest>();
+        let h_lde = lde_domain_size.ilog2() as usize;
+        let batch_ov = 2 + q;
+        let trace_exp_digest_nodes = expected_merkle_batch_digest_uniform(h_lde, q);
+        let trace_paths = trace_exp_digest_nodes.saturating_mul(d).saturating_add(batch_ov);
+
+        if self.log_diag() {
+            println!("\n=== experiment_sha (во время prove): trace/constraint batch paths (ожид., модель) ===");
+            println!("Q = {}, |H| = {} B, η = {}", q, d, ff);
+            println!(
+                "Trace / constraint LDE batch paths (ожид., байты): {} B = E_nodes·|H| + {}, где E_nodes = Σ_{{d=1}}^{{h-2}} 2^d(1-(1-2^-d)^Q) (без уровня у листьев), h=⌊log₂ N_LDE⌋",
+                trace_paths, batch_ov
+            );
+            println!(
+                "Trace / constraint Merkle: листьев дерева (ожид.) = N_LDE = {}; digest-узлов в batch E_nodes = {}",
+                lde_domain_size, trace_exp_digest_nodes
+            );
+
+            println!("\nFRI по слоям — ожидание (fold_positions → Q_i; E_nodes(h,Q_i), сумма d=1..h-2, без слоя у листьев):");
+            println!(
+                "{:<6} {:>6} {:>16} {:>10} {:>18}",
+                "слой", "глуб.", "листьев дерева", "Q_i ожид.", "digest узлов ожид."
+            );
+            println!("{}", "-".repeat(60));
+            let exp_rows = expected_fri_digest_per_layer(lde_domain_size, query_positions, fri_options);
+            for (layer_idx, &(merkle_leaves, qi, exp_digest_nodes)) in exp_rows.iter().enumerate() {
+                let h = merkle_leaves.ilog2() as usize;
+                println!(
+                    "{:<6} {:>6} {:>16} {:>10} {:>18}",
+                    layer_idx, h, merkle_leaves, qi, exp_digest_nodes
+                );
+            }
+            println!("(факт по слоям — в блоке «FRI Merkle — факт» ниже, после build_proof)\n");
+        }
+    }
+
+    fn on_fri_proof_built<E: FieldElement<BaseField = Self::BaseField>>(
+        &self,
+        fri_proof: &fri::FriProof,
+        lde_domain_size: usize,
+        fri_options: &FriOptions,
+        query_positions: &[usize],
+    ) {
+        let ff = fri_options.folding_factor();
+        let expected = expected_fri_digest_per_layer(lde_domain_size, query_positions, fri_options);
+
+        if let Some(ref rec) = self.fri_digest_recorder {
+            let mut rows = rec.rows.lock().expect("fri stats mutex");
+            for (i, layer) in fri_proof.layers().iter().enumerate() {
+                let s = layer
+                    .merkle_opening_stats::<E, H>(ff)
+                    .expect("FRI layer merkle stats");
+                let (merkle_leaves_f, qi_e, digest_e) = expected
+                    .get(i)
+                    .copied()
+                    .unwrap_or((0, 0, 0));
+                rows.push(FriDigestStatsRow {
+                    run: rec.run,
+                    layer: i,
+                    digest_cells_actual: s.batch_internal_digest_cells,
+                    digest_cells_expected: digest_e,
+                    opened_leaves: s.num_opened_leaves,
+                    tree_leaf_capacity: s.tree_leaf_capacity,
+                    merkle_depth: s.merkle_depth,
+                    merkle_leaves_formula: merkle_leaves_f,
+                    qi_expected: qi_e,
+                });
+            }
+        }
+
+        if self.log_diag() {
+            println!("\n=== experiment_sha (во время prove): FRI Merkle — факт из `FriProver::build_proof` ===");
+            println!(
+                "{:<6} {:>6} {:>16} {:>14} {:>18}",
+                "слой",
+                "глуб.",
+                "листьев дерева",
+                "открыто листьев",
+                "digest в batch"
+            );
+            println!("{}", "-".repeat(66));
+            for (i, layer) in fri_proof.layers().iter().enumerate() {
+                let s = layer
+                    .merkle_opening_stats::<E, H>(ff)
+                    .expect("FRI layer merkle stats");
+                println!(
+                    "{:<6} {:>6} {:>16} {:>14} {:>18}",
+                    i,
+                    s.merkle_depth,
+                    s.tree_leaf_capacity,
+                    s.num_opened_leaves,
+                    s.batch_internal_digest_cells
+                );
+            }
+            println!();
+        }
     }
 }

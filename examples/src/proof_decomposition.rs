@@ -18,6 +18,49 @@ use air::proof::{Commitments, Queries, OodFrame};
 use fri::FriProof;
 use core_utils::{ByteWriter, Serializable, SliceReader, Deserializable, ByteReader};
 
+/// Ожидаемые размеры компонентов доказательства по формулам (proof_size.md). Верхняя оценка.
+#[derive(Debug, Clone)]
+pub struct ExpectedProofBreakdown {
+    pub context: usize,
+    pub num_unique_queries: usize,
+    pub commitments: usize,
+    pub trace_queries: usize,
+    pub constraint_queries: usize,
+    pub ood_frame: usize,
+    pub fri_proof: usize,
+    pub pow_nonce: usize,
+}
+
+impl ExpectedProofBreakdown {
+    pub fn total(&self) -> usize {
+        self.context
+            + self.num_unique_queries
+            + self.commitments
+            + self.trace_queries
+            + self.constraint_queries
+            + self.ood_frame
+            + self.fri_proof
+            + self.pow_nonce
+    }
+
+    /// Строковая таблица ожидаемых байтов по компонентам (для сверки с `ProofDecomposition`).
+    pub fn print_labeled_estimate(&self, title: &str) {
+        println!("\n=== {} ===", title);
+        println!("{:<28} {:>12}", "Компонент", "байт (ожид.)");
+        println!("{}", "-".repeat(42));
+        println!("{:<28} {:>12}", "Context", self.context);
+        println!("{:<28} {:>12}", "Num unique queries", self.num_unique_queries);
+        println!("{:<28} {:>12}", "Commitments", self.commitments);
+        println!("{:<28} {:>12}", "Trace queries", self.trace_queries);
+        println!("{:<28} {:>12}", "Constraint queries", self.constraint_queries);
+        println!("{:<28} {:>12}", "OOD frame", self.ood_frame);
+        println!("{:<28} {:>12}", "FRI proof", self.fri_proof);
+        println!("{:<28} {:>12}", "POW nonce", self.pow_nonce);
+        println!("{}", "-".repeat(42));
+        println!("{:<28} {:>12}", "ИТОГО", self.total());
+    }
+}
+
 /// Детальная информация о размерах компонентов доказательства
 #[derive(Debug, Clone)]
 pub struct ProofDecomposition {
@@ -449,6 +492,57 @@ impl ProofDecomposition {
         println!("{}", "-".repeat(60));
         println!("{:<25} {:>12} {:>10.2} {:>7.2}%", 
                  "ИТОГО", self.total_size, self.total_size as f64 / 1024.0, 100.0);
+    }
+
+    /// Компактная таблица реальных размеров (та же разбивка, что у `ExpectedProofBreakdown::print_labeled_estimate`).
+    pub fn print_actual_component_table(&self, title: &str) {
+        println!("\n=== {} ===", title);
+        println!("{:<28} {:>12}", "Компонент", "байт (факт)");
+        println!("{}", "-".repeat(42));
+        println!("{:<28} {:>12}", "Context", self.context_size);
+        println!("{:<28} {:>12}", "Num unique queries", self.num_unique_queries_size);
+        println!("{:<28} {:>12}", "Commitments", self.commitments_size);
+        println!("{:<28} {:>12}", "Trace queries", self.trace_queries_total_size);
+        println!("{:<28} {:>12}", "Constraint queries", self.constraint_queries_size);
+        println!("{:<28} {:>12}", "OOD frame", self.ood_frame_size);
+        println!("{:<28} {:>12}", "FRI proof", self.fri_proof_size);
+        println!("{:<28} {:>12}", "POW nonce", self.pow_nonce_size);
+        println!("{}", "-".repeat(42));
+        println!("{:<28} {:>12}", "ИТОГО", self.total_size);
+    }
+
+    /// Печатает таблицу: компонент | ожидаемый размер (по формуле) | реальный размер.
+    /// Порядок компонентов как в proof_size.md.
+    pub fn print_expected_vs_actual_table(&self, expected: &ExpectedProofBreakdown) {
+        println!("\n┌────────────────────────────────────────────────────────────────────────────────────────┐");
+        println!("│ ОЖИДАЕМЫЙ vs РЕАЛЬНЫЙ (ожидаемый — по формулам с фактическими L и context из доказательства) │");
+        println!("└────────────────────────────────────────────────────────────────────────────────────────┘\n");
+
+        let rows = [
+            ("Context", expected.context, self.context_size),
+            ("Num unique queries", expected.num_unique_queries, self.num_unique_queries_size),
+            ("Commitments", expected.commitments, self.commitments_size),
+            ("Trace queries", expected.trace_queries, self.trace_queries_total_size),
+            ("Constraint queries", expected.constraint_queries, self.constraint_queries_size),
+            ("OOD frame", expected.ood_frame, self.ood_frame_size),
+            ("FRI proof", expected.fri_proof, self.fri_proof_size),
+            ("POW nonce", expected.pow_nonce, self.pow_nonce_size),
+        ];
+
+        println!("{:<25} {:>14} {:>14} {:>12}", "Компонент", "Ожид. (байт)", "Реальный (байт)", "Разница");
+        println!("{}", "-".repeat(72));
+        for (name, exp, actual) in &rows {
+            let diff = (*actual as i64) - (*exp as i64);
+            let diff_str = format!("{:+}", diff);
+            println!("{:<25} {:>14} {:>14} {:>12}", name, exp, actual, diff_str);
+        }
+        println!("{}", "-".repeat(72));
+        println!("{:<25} {:>14} {:>14} {:>12}", 
+                 "ИТОГО", 
+                 expected.total(), 
+                 self.total_size,
+                 format!("{:+}", self.total_size as i64 - expected.total() as i64));
+        println!();
     }
     
     fn print_component(&self, name: &str, size: usize, total: usize) {

@@ -225,6 +225,29 @@ pub trait Prover {
     // PROVIDED METHODS
     // --------------------------------------------------------------------------------------------
 
+    /// Called right after query positions are chosen (before opening proofs are built).
+    /// Default: no-op. For diagnostics (e.g. proof-size estimates during generation).
+    #[allow(unused_variables)]
+    fn on_query_positions_determined(
+        &self,
+        _query_positions: &[usize],
+        _lde_domain_size: usize,
+        _fri_options: &fri::FriOptions,
+    ) {
+    }
+
+    /// Called right after the FRI query phase finishes (`FriProver::build_proof`), before trace and
+    /// constraint openings are assembled into the final [`Proof`]. Default: no-op.
+    #[allow(unused_variables)]
+    fn on_fri_proof_built<E: FieldElement<BaseField = Self::BaseField>>(
+        &self,
+        _fri_proof: &fri::FriProof,
+        _lde_domain_size: usize,
+        _fri_options: &fri::FriOptions,
+        _query_positions: &[usize],
+    ) {
+    }
+
     /// Builds and returns the auxiliary trace.
     #[allow(unused_variables)]
     #[maybe_async]
@@ -438,6 +461,7 @@ pub trait Prover {
 
         // 6 ----- compute FRI layers for the composition polynomial ------------------------------
         let fri_options = air.options().to_fri_options();
+        let fri_options_for_hook = fri_options.clone();
         let num_layers = fri_options.num_fri_layers(lde_domain_size);
         let mut fri_prover = FriProver::<_, _, _, Self::VC>::new(fri_options);
         info_span!("compute_fri_layers", num_layers)
@@ -461,11 +485,19 @@ pub trait Prover {
             query_positions
         };
 
+        self.on_query_positions_determined(&query_positions, lde_domain_size, &fri_options_for_hook);
+
         // 8 ----- build proof object -------------------------------------------------------------
         let proof = {
             let span = info_span!("build_proof_object").entered();
             // generate FRI proof
             let fri_proof = fri_prover.build_proof(&query_positions);
+            self.on_fri_proof_built::<E>(
+                &fri_proof,
+                lde_domain_size,
+                &fri_options_for_hook,
+                &query_positions,
+            );
 
             // query the execution trace at the selected position; for each query, we need the
             // state of the trace at that position and a batch opening proof at specified queries

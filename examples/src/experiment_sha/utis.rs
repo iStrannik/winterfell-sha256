@@ -16,7 +16,8 @@ pub fn extend_sha256_block(data: Vec<BaseElement>) -> Vec<BaseElement> {
     w.iter().map(|e| BaseElement::new(*e as u128)).collect()
 }
 
-pub fn prepare_sha_256_block(s: &String) -> Vec<BaseElement> {
+/// SHA-256 padding to whole blocks (same layout as [`prepare_sha_256_block`]).
+pub fn prepare_sha_256_block_bytes(s: &str) -> Vec<u8> {
     let mut m = s.as_bytes().to_vec();
     m.push(0x80);
     if 64 - m.len() % 64 < 8 {
@@ -24,8 +25,18 @@ pub fn prepare_sha_256_block(s: &String) -> Vec<BaseElement> {
     }
     m.append(&mut vec![0u8; 64 - m.len() % 64 - 8]);
     m.append(&mut (s.as_bytes().len() as u64 * 8).to_be_bytes().to_vec());
-    println!("Len of final block is {:?} bytes", m.len());
-    bytes_to_elements(&m)
+    m
+}
+
+pub fn prepare_sha_256_block(s: &String) -> Vec<BaseElement> {
+    let v = prepare_sha_256_block_bytes(s);
+    println!("Len of final block is {:?} bytes", v.len());
+    bytes_to_elements(&v)
+}
+
+/// Same as [`prepare_sha_256_block`] without printing padding length.
+pub fn prepare_sha_256_block_silent(s: &str) -> Vec<BaseElement> {
+    bytes_to_elements(&prepare_sha_256_block_bytes(s))
 }
 
 pub fn bytes_to_elements(s: &[u8]) -> Vec<BaseElement> {

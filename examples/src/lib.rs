@@ -43,6 +43,36 @@ pub trait Example {
     fn prove(&self) -> Proof;
     fn verify(&self, proof: Proof) -> Result<(), VerifierError>;
     fn verify_with_wrong_inputs(&self, proof: Proof) -> Result<(), VerifierError>;
+
+    /// Ожидаемые размеры компонентов по формулам (proof_size.md). None для примеров без формулы.
+    fn expected_proof_breakdown(&self, _trace_length: usize) -> Option<proof_decomposition::ExpectedProofBreakdown> {
+        None
+    }
+
+    /// Ожидаемые размеры с подстановкой фактических context, L и num_unique_queries из доказательства.
+    /// По умолчанию вызывает expected_proof_breakdown(trace_length).
+    fn expected_proof_breakdown_for_comparison(
+        &self,
+        trace_length: usize,
+        _actual_context_size: usize,
+        _actual_fri_layers: usize,
+        _actual_num_unique_queries: usize,
+    ) -> Option<proof_decomposition::ExpectedProofBreakdown> {
+        self.expected_proof_breakdown(trace_length)
+    }
+
+    /// Размер proof: для `experiment_sha` — таблицы оценок и факта; для остальных — одна строка (байты сериализации).
+    fn print_formula_proof_size_estimates(
+        &self,
+        _proof: &Proof,
+        _decomposition: &proof_decomposition::ProofDecomposition,
+        proof_serialized_len: usize,
+    ) {
+        println!(
+            "Proof size: {:.1} KB",
+            proof_serialized_len as f64 / 1024.0
+        );
+    }
 }
 
 // EXAMPLE OPTIONS
@@ -227,6 +257,22 @@ pub enum ExampleType {
         /// Length of string; number of blocks after padding must be power of two
         #[structopt(short = "n", default_value = "240")]
         string_length: usize,
+    },
+    /// Repeatedly prove experiment_sha with random inputs; save FRI batch digest counts to CSV and plot histograms per layer
+    #[cfg(feature = "std")]
+    ExperimentShaFriDigestStats {
+        /// Length of input string (same constraint as `experiment-sha`)
+        #[structopt(short = "n", default_value = "240")]
+        string_length: usize,
+        /// Number of prove cycles (new pseudo-random input each time)
+        #[structopt(long = "cycles", default_value = "50")]
+        cycles: usize,
+        /// Output CSV path
+        #[structopt(long = "csv", default_value = "fri_digest_stats.csv")]
+        csv_path: String,
+        /// Prefix for PNG files (`{prefix}_layer{i}_digest_actual.png`)
+        #[structopt(long = "plot-prefix", default_value = "fri_digest_stats")]
+        plot_prefix: String,
     },
     /// Run proof size benchmarks
     ProofSizeBenchmark {

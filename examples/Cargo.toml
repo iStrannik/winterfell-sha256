@@ -20,6 +20,13 @@ path = "src/main.rs"
 bench = false
 doc = false
 
+[[bin]]
+name = "sha256_proof_scaling"
+path = "src/bin/sha256_proof_scaling.rs"
+required-features = ["std"]
+bench = false
+doc = false
+
 [features]
 concurrent = ["winterfell/concurrent", "std"]
 default = ["std"]

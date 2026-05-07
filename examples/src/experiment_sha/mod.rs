@@ -3,16 +3,19 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the root directory of this source tree.
 
-use core::marker::PhantomData;
+use core::{marker::PhantomData, mem::size_of};
 
+use core_utils::Serializable;
 use tracing::{field, info_span};
 use winterfell::{
     crypto::{DefaultRandomCoin, ElementHasher, MerkleTree},
     math::{fields::f128::BaseElement, FieldElement},
-    Proof, ProofOptions, Prover, Trace, VerifierError,
+    FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError,
 };
 
-use crate::{experiment_sha::{air::PublicInputs, table_constants::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block}}, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
+use crate::experiment_sha::vm_program::PROGRAM_LEN;
+use crate::proof_decomposition::{ExpectedProofBreakdown, ProofDecomposition};
+use crate::{experiment_sha::{air::PublicInputs, table_constants::TABLE_WIDTH, utis::{bytes_to_elements, prepare_sha_256_block, prepare_sha_256_block_silent}}, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
 
 mod air;
 mod assertions;
@@ -24,6 +27,9 @@ mod utis;
 mod table;
 mod vm_program;
 mod prover;
+pub mod fri_digest_stats;
+#[cfg(feature = "std")]
+pub mod proof_scaling;
 use prover::ExperimentShaProver;
 
 pub fn custom_sha256(message: &[u8]) -> [u8; 32] {
@@ -158,6 +164,90 @@ pub fn custom_sha256(message: &[u8]) -> [u8; 32] {
 // EXPERIMENT SHA EXAMPLE
 // ================================================================================================
 
+/// Cyclically proves SHA example with varying ASCII inputs, records FRI batch digest counts per layer to CSV, then plots histograms.
+#[cfg(feature = "std")]
+pub fn run_fri_digest_stats_cycle(
+    options: &ExampleOptions,
+    string_length: usize,
+    cycles: usize,
+    csv_path: &str,
+    plot_prefix: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::sync::{Arc, Mutex};
+
+    use fri_digest_stats::FriDigestStatsRow;
+
+    let (base_options, hash_fn) = options.to_proof_options(28, 8);
+    let rows: Arc<Mutex<Vec<FriDigestStatsRow>>> = Arc::new(Mutex::new(Vec::new()));
+
+    match hash_fn {
+        HashFunction::Blake3_192 => {
+            run_digest_stats_inner::<Blake3_192>(base_options, string_length, cycles, csv_path, plot_prefix, rows)
+        },
+        HashFunction::Blake3_256 => {
+            run_digest_stats_inner::<Blake3_256>(base_options, string_length, cycles, csv_path, plot_prefix, rows)
+        },
+        HashFunction::Sha3_256 => {
+            run_digest_stats_inner::<Sha3_256>(base_options, string_length, cycles, csv_path, plot_prefix, rows)
+        },
+        _ => Err("experiment-sha FRI stats: supported hash_fn are blake3_192, blake3_256, sha3_256".into()),
+    }
+}
+
+/// Printable ASCII (UTF-8), length `length`; uses OS RNG via `winter-rand-utils`.
+#[cfg(feature = "std")]
+pub(crate) fn random_ascii_string(length: usize) -> String {
+    if length == 0 {
+        return String::new();
+    }
+    use rand_utils::rand_vector;
+    rand_vector::<u8>(length)
+        .into_iter()
+        .map(|b| char::from_u32(u32::from(b % 95) + 32).unwrap_or('a'))
+        .collect()
+}
+
+#[cfg(feature = "std")]
+fn run_digest_stats_inner<H: ElementHasher>(
+    options: ProofOptions,
+    string_length: usize,
+    cycles: usize,
+    csv_path: &str,
+    plot_prefix: &str,
+    shared_rows: std::sync::Arc<std::sync::Mutex<Vec<fri_digest_stats::FriDigestStatsRow>>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    H: ElementHasher<BaseField = BaseElement> + Sync,
+    H::Digest: Default,
+{
+    use fri_digest_stats::FriDigestRunRecorder;
+    use winterfell::Prover;
+
+    for run in 0..cycles {
+        println!("fri digest stats: итерация {}/{}", run + 1, cycles);
+        let s = random_ascii_string(string_length);
+        let example = ExperimentShaExample::<H>::from_input_string(s, options.clone(), false);
+        let recorder = FriDigestRunRecorder::with_shared_rows(run, shared_rows.clone());
+        let prover =
+            ExperimentShaProver::<H>::new_with_fri_digest_recorder(options.clone(), recorder, true);
+        let trace = prover.build_trace(PublicInputs {
+            data: example.input_data.clone(),
+            result: example.result.clone(),
+        });
+        prover
+            .prove(trace)
+            .map_err(|e| format!("prove run {run}: {e:?}"))?;
+    }
+    let data = shared_rows
+        .lock()
+        .map_err(|e| format!("stats mutex: {e}"))?
+        .clone();
+    fri_digest_stats::write_csv(csv_path, &data)?;
+    fri_digest_stats::print_digest_summary(&data);
+    fri_digest_stats::plot_digest_layer_histograms(&data, plot_prefix)?;
+    Ok(())
+}
+
 pub fn get_example(
     options: &ExampleOptions,
     string_length: usize,
@@ -185,10 +275,390 @@ pub struct ExperimentShaExample<H: ElementHasher> {
     _hasher: PhantomData<H>,
 }
 
-impl<H: ElementHasher> ExperimentShaExample<H> {
+/// FRI layer `i` commits to `n_lde / ff^(i+1)` листьев-хэшей (`fri/src/prover` + `build_layer_commitment`).
+
+/// Число коэффициентов remainder после `L` свёрток: `|domain|/blowup` на последнем слое (`set_remainder`).
+fn fri_remainder_num_coeffs(n_lde: usize, ff: usize, num_layers: usize, blowup: usize) -> usize {
+    let mut domain = n_lde;
+    for _ in 0..num_layers {
+        domain /= ff;
+    }
+    domain / blowup
+}
+
+/// Диагностика FRI: на каждом слое число **листьев Merkle-дерева** (размер домена коммита) и **Q_i**
+/// — число запросов в batch после `fold_positions` (из длины `values` в proof; может быть < Q).
+fn print_fri_layers_merkle_and_query_stats(
+    proof: &Proof,
+    decomposition: &ProofDecomposition,
+    ff: usize,
+    b_e: usize,
+) {
+    let n_lde = proof.lde_domain_size();
+    let q_top = proof.num_unique_queries as usize;
+    let cell = ff.saturating_mul(b_e);
+
+    println!("\n=== experiment_sha (после prove): FRI — Merkle-листья и Q_i по сериализованному proof ===");
+    println!(
+        "Q (уникальных позиций на LDE после выборки): {}\n\
+         Листья Merkle на слое i: N_LDE / η^(i+1) — полный домен дерева.\n\
+         Q_i: из размера values слоя / (η·B_E); уменьшение Q_i — из-за fold_positions.\n\
+         Фактические Merkle-статистики по слоям см. блок «во время prove: FRI Merkle — факт» выше.\n",
+        q_top
+    );
+    println!(
+        "{:<6} {:>14} {:>10} {:>8} {:>14} {:>12}",
+        "слой",
+        "Merkle листьев",
+        "⌊log2⌋",
+        "Q_i",
+        "values байт",
+        "paths байт"
+    );
+    println!("{}", "-".repeat(70));
+
+    let mut merkle_leaves = n_lde;
+    let mut min_q_i = q_top;
+    for layer in &decomposition.fri_decomposition.layer_sizes {
+        merkle_leaves /= ff;
+        let log2_leaves = merkle_leaves.ilog2() as usize;
+        let q_i = if cell > 0 && layer.values_size % cell == 0 {
+            layer.values_size / cell
+        } else {
+            0
+        };
+        min_q_i = min_q_i.min(q_i);
+        println!(
+            "{:<6} {:>14} {:>10} {:>8} {:>14} {:>12}",
+            layer.layer_index,
+            merkle_leaves,
+            log2_leaves,
+            q_i,
+            layer.values_size,
+            layer.paths_size
+        );
+    }
+    println!("{}", "-".repeat(70));
+    if min_q_i < q_top {
+        println!(
+            "Замечание: на одном из слоёв Q_i < Q — batch Merkle и values меньше, чем при «полных» Q запросах на каждом слое."
+        );
+    }
+    println!();
+}
+
+impl<H: ElementHasher> ExperimentShaExample<H>
+where
+    H: ElementHasher<BaseField = BaseElement> + Sync,
+    H::Digest: Default,
+{
+    /// Expected proof size (bytes) from formulas in proof_size.md (no AIR/context calls).
+    /// Uses compact form: single-segment trace, 1-byte usize for length prefixes, **batch** Merkle path sizes.
+    ///
+    /// Merkle digest count (model): **E(h,Q) = Σ_{d=1}^{h-2} 2^d (1 − (1 − 2^{-d})^Q)** (уровень d=h−1 у листьев не входит — листья не в `nodes`); bytes ≈ E×D.
+    /// Для FRI по слоям — тот же E(h_i, Q_i) после `fold_positions`. Симуляция позиций: **0..Q−1** на LDE
+    /// (не `i·N_LDE/Q`: такой шаг резонирует с `η` и даёт искусственное слияние остатков при `%`, занижая Q_i и пути).
+    ///
+    /// Formulas used:
+    /// - N_LDE = N × blowup, depth_LDE = ⌈log₂(N_LDE)⌉
+    /// - D_max = max over constraints of (base·(N−1) + Σ (N/c)·(c−1)); for SHA AIR max is (2, [PROGRAM_LEN])
+    /// - C_cols = max(1, ⌈(D_max − (N−k)) / N⌉), k = 1
+    /// - L: same as Winterfell FriOptions::num_fri_layers(N_LDE) (while domain_size > max_remainder_size: domain_size /= ff, L += 1)
+    /// - Trace/constraint paths: E(depth_LDE, Q)×D (LDE Merkle).
+    /// - FRI paths: сумма по слоям E(h_i, Q_i)×D; remainder: `(N_LDE/ff^L)/blowup` коэффициентов × B_E.
+    fn compute_expected_breakdown(&self, trace_length: usize) -> ExpectedProofBreakdown {
+        let n = trace_length;
+        let w = TABLE_WIDTH;
+        let q = self.options.num_queries();
+        let blowup = self.options.blowup_factor();
+        let fri = self.options.to_fri_options();
+        let ff = fri.folding_factor();
+        let r = fri.remainder_max_degree() + 1;
+        let b = size_of::<BaseElement>();
+        let d = size_of::<H::Digest>();
+        let ext_degree = match self.options.field_extension() {
+            FieldExtension::None => 1,
+            FieldExtension::Quadratic => 2,
+            FieldExtension::Cubic => 3,
+        };
+        let b_e = b * ext_degree;
+
+        let n_lde = n * blowup;
+        let depth_lde = n_lde.ilog2() as usize;
+
+        let d_max = 2 * (n - 1) + (n / PROGRAM_LEN) * (PROGRAM_LEN - 1);
+        let c_cols = core::cmp::max(1, (d_max - (n - 1)).div_ceil(n));
+
+        // Match Winterfell FriOptions::num_fri_layers(domain_size) exactly.
+        let max_remainder_size = r * blowup;
+        let mut domain_size = n_lde;
+        let mut l = 0;
+        while domain_size > max_remainder_size {
+            domain_size /= ff;
+            l += 1;
+        }
+
+        let trace_digest_cells = fri_digest_stats::expected_merkle_batch_digest_uniform(depth_lde, q);
+        let trace_merkle_bytes = trace_digest_cells.saturating_mul(d);
+
+        let fri_query_positions_sim: Vec<usize> = (0..q.max(1)).collect();
+        let fri_digest_cells_sum: usize = fri_digest_stats::expected_fri_digest_per_layer(n_lde, &fri_query_positions_sim, &fri)
+            .iter()
+            .map(|(_, _, cells)| *cells)
+            .sum();
+        let fri_paths_sum = fri_digest_cells_sum.saturating_mul(d);
+        let remainder_coeffs = fri_remainder_num_coeffs(n_lde, ff, l, blowup);
+        let remainder_bytes = remainder_coeffs * b_e;
+
+        const C_CTX_ESTIMATE: usize = 128;
+
+        ExpectedProofBreakdown {
+            context: C_CTX_ESTIMATE,
+            num_unique_queries: 1,
+            commitments: 4 + (l + 3) * d,
+            trace_queries: 3 + q * w * b + trace_merkle_bytes,
+            constraint_queries: 2 + q * c_cols * b_e + trace_merkle_bytes,
+            ood_frame: 6 + 2 * (w + c_cols) * b_e,
+            fri_proof: 4 + l * (8 + q * ff * b_e) + remainder_bytes + fri_paths_sum,
+            pow_nonce: 8,
+        }
+    }
+
+    /// Верхняя оценка размера Merkle batch по теореме~7.1\textup{(i)}: $N_{\mathrm{auth}}\le Q(h-\lfloor\log_2 Q\rfloor)$ digest-узлов;
+    /// применяется к trace/constraint LDE и как грубый worst-case по слоям FRI ($Q h_i$ на слой).
+    fn compute_worst_case_breakdown(&self, trace_length: usize) -> ExpectedProofBreakdown {
+        let n = trace_length;
+        let w = TABLE_WIDTH;
+        let q = self.options.num_queries();
+        let blowup = self.options.blowup_factor();
+        let fri = self.options.to_fri_options();
+        let ff = fri.folding_factor();
+        let r = fri.remainder_max_degree() + 1;
+        let b = size_of::<BaseElement>();
+        let d = size_of::<H::Digest>();
+        let ext_degree = match self.options.field_extension() {
+            FieldExtension::None => 1,
+            FieldExtension::Quadratic => 2,
+            FieldExtension::Cubic => 3,
+        };
+        let b_e = b * ext_degree;
+
+        let n_lde = n * blowup;
+        let depth_lde = n_lde.ilog2() as usize;
+
+        let d_max = 2 * (n - 1) + (n / PROGRAM_LEN) * (PROGRAM_LEN - 1);
+        let c_cols = core::cmp::max(1, (d_max - (n - 1)).div_ceil(n));
+
+        let max_remainder_size = r * blowup;
+        let mut domain_size = n_lde;
+        let mut l = 0;
+        while domain_size > max_remainder_size {
+            domain_size /= ff;
+            l += 1;
+        }
+
+        let fq = if q <= 1 { 0usize } else { q.ilog2() as usize };
+        let trace_merkle_worst = q
+            .saturating_mul(depth_lde.saturating_sub(fq))
+            .saturating_mul(d)
+            .saturating_add(2 + q);
+
+        let mut fri_paths_worst = 0usize;
+        let mut dom = n_lde;
+        for _ in 0..l {
+            dom /= ff;
+            let h_layer = dom.ilog2() as usize;
+            fri_paths_worst =
+                fri_paths_worst.saturating_add(q.saturating_mul(h_layer).saturating_mul(d));
+        }
+        let remainder_coeffs = fri_remainder_num_coeffs(n_lde, ff, l, blowup);
+        let remainder_bytes = remainder_coeffs * b_e;
+
+        const C_CTX_ESTIMATE: usize = 128;
+
+        ExpectedProofBreakdown {
+            context: C_CTX_ESTIMATE,
+            num_unique_queries: 1,
+            commitments: 4 + (l + 3) * d,
+            trace_queries: 3 + q * w * b + trace_merkle_worst,
+            constraint_queries: 2 + q * c_cols * b_e + trace_merkle_worst,
+            ood_frame: 6 + 2 * (w + c_cols) * b_e,
+            fri_proof: 4 + l * (8 + q * ff * b_e) + remainder_bytes + fri_paths_worst,
+            pow_nonce: 8,
+        }
+    }
+
+    /// Как `compute_expected_breakdown`, но подставляет фактические context, L и Q из proof.
+    /// Размеры batch Merkle (trace, constraint, FRI paths) — та же модель **E(h,Q)**; для FRI —
+    /// те же симулированные позиции, что в `compute_expected_breakdown` (см. комментарий там).
+    fn compute_expected_breakdown_with_actuals(
+        &self,
+        trace_length: usize,
+        actual_context_size: usize,
+        actual_fri_layers: usize,
+        actual_num_unique_queries: usize,
+    ) -> ExpectedProofBreakdown {
+        let n = trace_length;
+        let w = TABLE_WIDTH;
+        let q = actual_num_unique_queries.max(1); // use actual from proof
+        let blowup = self.options.blowup_factor();
+        let fri = self.options.to_fri_options();
+        let ff = fri.folding_factor();
+        let b = size_of::<BaseElement>();
+        let d = size_of::<H::Digest>();
+        let ext_degree = match self.options.field_extension() {
+            FieldExtension::None => 1,
+            FieldExtension::Quadratic => 2,
+            FieldExtension::Cubic => 3,
+        };
+        let b_e = b * ext_degree;
+
+        let n_lde = n * blowup;
+        let depth_lde = n_lde.ilog2() as usize;
+
+        let d_max = 2 * (n - 1) + (n / PROGRAM_LEN) * (PROGRAM_LEN - 1);
+        let c_cols = core::cmp::max(1, (d_max - (n - 1)).div_ceil(n));
+
+        let l = actual_fri_layers;
+
+        let trace_digest_cells = fri_digest_stats::expected_merkle_batch_digest_uniform(depth_lde, q);
+        let trace_merkle_bytes = trace_digest_cells.saturating_mul(d);
+
+        let fri_query_positions_sim: Vec<usize> = (0..q.max(1)).collect();
+        let fri_digest_cells_sum: usize = fri_digest_stats::expected_fri_digest_per_layer(n_lde, &fri_query_positions_sim, &fri)
+            .into_iter()
+            .take(l)
+            .map(|(_, _, cells)| cells)
+            .sum();
+        let fri_paths_sum = fri_digest_cells_sum.saturating_mul(d);
+
+        let remainder_coeffs = fri_remainder_num_coeffs(n_lde, ff, l, blowup);
+        let remainder_bytes = remainder_coeffs * b_e;
+
+        // Queries outer: 1×usize (trace_queries list len) + per segment: 2×usize (values len, proof len)
+        let trace_overhead = 1 + 2; // list len + one Queries: two length prefixes
+        let constraint_overhead = 2; // one Queries: two length prefixes
+
+        ExpectedProofBreakdown {
+            context: actual_context_size,
+            num_unique_queries: 1,
+            commitments: 4 + (l + 3) * d,
+            trace_queries: trace_overhead + q * w * b + trace_merkle_bytes,
+            constraint_queries: constraint_overhead + q * c_cols * b_e + trace_merkle_bytes,
+            ood_frame: 6 + 2 * (w + c_cols) * b_e,
+            fri_proof: 4 + l * (8 + q * ff * b_e) + remainder_bytes + fri_paths_sum,
+            pow_nonce: 8,
+        }
+    }
+
+    fn expected_proof_size_bytes(&self, trace_length: usize) -> usize {
+        self.compute_expected_breakdown(trace_length).total()
+    }
+
+    /// Worst-case Merkle верхняя оценка (теорема~7.1\textup{(i)}), см. `compute_worst_case_breakdown`.
+    pub fn worst_case_proof_breakdown(&self, trace_length: usize) -> ExpectedProofBreakdown {
+        self.compute_worst_case_breakdown(trace_length)
+    }
+
+    /// Как `Example::prove`, но без `print_input_parameters` (для пакетных прогонов).
+    pub fn prove_without_parameters_print(&self) -> Proof {
+        let prover = ExperimentShaProver::<H>::new(self.options.clone());
+        let trace = prover.build_trace(PublicInputs {
+            data: self.input_data.clone(),
+            result: self.result.clone(),
+        });
+        prover.prove(trace).unwrap()
+    }
+
+    /// Prints all input parameters (from proof_size.md) for the current run.
+    pub fn print_input_parameters(&self, trace_length: usize) {
+        let n = trace_length;
+        let w = TABLE_WIDTH;
+        let q = self.options.num_queries();
+        let blowup = self.options.blowup_factor();
+        let fri = self.options.to_fri_options();
+        let ff = fri.folding_factor();
+        let r = fri.remainder_max_degree() + 1;
+        let b = size_of::<BaseElement>();
+        let d = size_of::<H::Digest>();
+        let field_ext = match self.options.field_extension() {
+            FieldExtension::None => "None",
+            FieldExtension::Quadratic => "Quadratic",
+            FieldExtension::Cubic => "Cubic",
+        };
+        let ext_degree = match self.options.field_extension() {
+            FieldExtension::None => 1,
+            FieldExtension::Quadratic => 2,
+            FieldExtension::Cubic => 3,
+        };
+        let b_e = b * ext_degree;
+
+        println!("\n=====================");
+        println!("INPUT PARAMETERS (proof_size.md)");
+        println!("=====================");
+        println!("  N (trace length)           = {}", n);
+        println!("  W (trace width)           = {}", w);
+        println!("  Q (num_queries)            = {}", q);
+        println!("  blowup                    = {}", blowup);
+        println!("  grinding_factor           = {}", self.options.grinding_factor());
+        println!("  field_extension           = {}", field_ext);
+        println!("  ff (FRI folding factor)    = {}", ff);
+        println!("  remainder_max_degree      = {}  (R = remainder_max_degree + 1 = {})", fri.remainder_max_degree(), r);
+        println!("  B (base field elem bytes) = {}", b);
+        println!("  D (digest size bytes)     = {}", d);
+
+        // Вычисленные константы (по формулам из proof_size.md)
+        let n_lde = n * blowup;
+        let depth_lde = n_lde.ilog2() as usize;
+        let d_max = 2 * (n - 1) + (n / PROGRAM_LEN) * (PROGRAM_LEN - 1);
+        let c_cols = core::cmp::max(1, (d_max - (n - 1)).div_ceil(n));
+        let max_remainder_size = r * blowup;
+        let mut domain_size = n_lde;
+        let mut l = 0;
+        while domain_size > max_remainder_size {
+            domain_size /= ff;
+            l += 1;
+        }
+        const C_CTX_ESTIMATE: usize = 128;
+        let num_trace_segments = 1usize;
+
+        println!("---------------------");
+        println!("ВЫЧИСЛЕННЫЕ КОНСТАНТЫ (derived, proof_size.md)");
+        println!("---------------------");
+        println!("  N_LDE                     = N * blowup = {}", n_lde);
+        println!("  depth_LDE                 = log2(N_LDE) = {}", depth_lde);
+        println!("  D_max                     = 2*(N-1) + (N/P)*(P-1) = {}  (P=PROGRAM_LEN)", d_max);
+        println!("  C_cols                    = max(1, ceil((D_max-(N-1))/N)) = {}", c_cols);
+        println!("  R                         = remainder_max_degree + 1 = {}", r);
+        println!("  B_E                       = B * ext_degree = {}", b_e);
+        println!("  max_remainder_size        = R * blowup = {}", max_remainder_size);
+        println!("  L (num FRI layers)         = (Winterfell num_fri_layers) = {}", l);
+        println!("  num_trace_segments        = {} (single-segment)", num_trace_segments);
+        println!("  C_ctx (estimate)           = {} bytes", C_CTX_ESTIMATE);
+
+        let expected_bytes = self.expected_proof_size_bytes(trace_length);
+        println!("---------------------");
+        println!("  Expected proof size       = {} bytes  ({:.2} KB)  (upper bound, see below)", expected_bytes, expected_bytes as f64 / 1024.0);
+        println!("=====================\n");
+    }
+
     pub fn new(string_length: usize, options: ProofOptions) -> Self {
-        let input_string = "a".repeat(string_length).to_string();
-        let input_data = prepare_sha_256_block(&input_string)
+        #[cfg(feature = "std")]
+        let input = random_ascii_string(string_length);
+        #[cfg(not(feature = "std"))]
+        let input = "a".repeat(string_length);
+        Self::from_input_string(input, options, true)
+    }
+
+    /// Builds the example from an explicit UTF-8 string (length should match the intended trace).
+    /// When `log_sha256` is false, padding length is not printed (for batch/stat runs).
+    pub fn from_input_string(input_string: String, options: ProofOptions, log_sha256: bool) -> Self {
+        let prep = if log_sha256 {
+            prepare_sha_256_block(&input_string)
+        } else {
+            prepare_sha_256_block_silent(&input_string)
+        };
+        let input_data = prep
             .chunks(16)
             .map(|chunk| {
                 let arr: [BaseElement; 16] = chunk
@@ -200,12 +670,13 @@ impl<H: ElementHasher> ExperimentShaExample<H> {
                 arr
             })
             .collect::<Vec<[BaseElement; 16]>>();
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(input_string.as_bytes());
         let hash_result = hasher.finalize();
-        println!("sha256(input_string) = {}", hex::encode(hash_result));
-        // println!("custom_sha256(input_string) = {}", hex::encode(custom_sha256(input_string.as_bytes())));
+        if log_sha256 {
+            println!("sha256(input_string) = {}", hex::encode(hash_result));
+        }
         ExperimentShaExample {
             options,
             input_data,
@@ -221,6 +692,7 @@ impl<H: ElementHasher> ExperimentShaExample<H> {
 impl<H: ElementHasher> Example for ExperimentShaExample<H>
 where
     H: ElementHasher<BaseField = BaseElement> + Sync,
+    H::Digest: Default,
 {
     fn prove(&self) -> Proof {
         // create a prover
@@ -234,6 +706,8 @@ where
                     tracing::Span::current().record("steps", trace.length());
                     trace
                 });
+
+        self.print_input_parameters(trace.length());
 
         // generate the proof
         prover.prove(trace).unwrap()
@@ -272,5 +746,52 @@ where
             PublicInputs { data: input_data, result: self.result.clone() },
             &acceptable_options,
         )
+    }
+
+    fn expected_proof_breakdown(&self, trace_length: usize) -> Option<ExpectedProofBreakdown> {
+        Some(self.compute_expected_breakdown(trace_length))
+    }
+
+    fn expected_proof_breakdown_for_comparison(
+        &self,
+        trace_length: usize,
+        actual_context_size: usize,
+        actual_fri_layers: usize,
+        actual_num_unique_queries: usize,
+    ) -> Option<ExpectedProofBreakdown> {
+        Some(self.compute_expected_breakdown_with_actuals(
+            trace_length,
+            actual_context_size,
+            actual_fri_layers,
+            actual_num_unique_queries,
+        ))
+    }
+
+    fn print_formula_proof_size_estimates(
+        &self,
+        proof: &Proof,
+        decomposition: &ProofDecomposition,
+        _proof_serialized_len: usize,
+    ) {
+        let n = proof.trace_info().length();
+        if let Some(expected) = self.expected_proof_breakdown_for_comparison(
+            n,
+            decomposition.context_size,
+            decomposition.fri_decomposition.num_layers,
+            proof.num_unique_queries as usize,
+        ) {
+            expected.print_labeled_estimate(
+                "experiment_sha: предполагаемые размеры (формулы, context/L/Q из proof)",
+            );
+        }
+        decomposition.print_actual_component_table("experiment_sha: реальные размеры (сериализация proof)");
+
+        let fri = self.options.to_fri_options();
+        let b_e = match self.options.field_extension() {
+            FieldExtension::None => size_of::<BaseElement>(),
+            FieldExtension::Quadratic => 2 * size_of::<BaseElement>(),
+            FieldExtension::Cubic => 3 * size_of::<BaseElement>(),
+        };
+        print_fri_layers_merkle_and_query_stats(proof, decomposition, fri.folding_factor(), b_e);
     }
 }

@@ -78,7 +78,7 @@ mod options;
 pub use options::FriOptions;
 
 mod proof;
-pub use proof::FriProof;
+pub use proof::{FriLayerMerkleOpeningStats, FriProof, FriProofLayer};
 
 mod errors;
 pub use errors::VerifierError;

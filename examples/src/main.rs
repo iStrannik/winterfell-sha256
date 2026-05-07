@@ -123,6 +123,25 @@ fn main() {
             run_proof_size_benchmark(&output_dir);
             return;
         },
+        #[cfg(feature = "std")]
+        ExampleType::ExperimentShaFriDigestStats {
+            string_length,
+            cycles,
+            ref csv_path,
+            ref plot_prefix,
+        } => {
+            if let Err(e) = experiment_sha::run_fri_digest_stats_cycle(
+                &options,
+                string_length,
+                cycles,
+                csv_path,
+                plot_prefix,
+            ) {
+                eprintln!("ExperimentSha FRI digest stats: {e}");
+                std::process::exit(1);
+            }
+            return;
+        },
     }
     .expect("The example failed to initialize.");
 
@@ -132,15 +151,11 @@ fn main() {
     println!("---------------------\nProof generated in {} ms", now.elapsed().as_millis());
 
     let proof_bytes = proof.to_bytes();
-    println!("Proof size: {:.1} KB", proof_bytes.len() as f64 / 1024f64);
-    
-    // Анализ структуры доказательства
-    println!("\n=====================");
-    println!("АНАЛИЗ СТРУКТУРЫ ДОКАЗАТЕЛЬСТВА");
-    println!("=====================");
+
     let decomposition = ProofDecomposition::analyze(&proof);
     decomposition.print_report();
-    
+    example.print_formula_proof_size_estimates(&proof, &decomposition, proof_bytes.len());
+
     let conjectured_security_level = options.get_proof_security_level_conjectured(&proof);
 
     #[cfg(feature = "std")]

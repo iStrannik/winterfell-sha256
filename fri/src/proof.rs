@@ -5,7 +5,7 @@
 
 use alloc::{string::ToString, vec::Vec};
 
-use crypto::{ElementHasher, Hasher, VectorCommitment};
+use crypto::{BatchMerkleProof, ElementHasher, Hasher, VectorCommitment};
 use math::FieldElement;
 use utils::{
     ByteReader, ByteWriter, Deserializable, DeserializationError, Serializable, SliceReader,
@@ -100,6 +100,12 @@ impl FriProof {
     /// Returns the number of partitions used during proof generation.
     pub fn num_partitions(&self) -> usize {
         2usize.pow(self.num_partitions as u32)
+    }
+
+    /// Returns the FRI layers built during proof generation (each layer holds query values and a
+    /// Merkle batch opening proof).
+    pub fn layers(&self) -> &[FriProofLayer] {
+        &self.layers
     }
 
     /// Returns the size of this proof in bytes.
@@ -237,6 +243,21 @@ impl Deserializable for FriProof {
 // FRI PROOF LAYER
 // ================================================================================================
 
+/// Merkle batch opening statistics for one FRI layer, read from the proof bytes produced by the
+/// FRI prover (same encoding as in the final serialized STARK proof).
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct FriLayerMerkleOpeningStats {
+    /// Depth of the Merkle tree used for this layer’s vector commitment (`BatchMerkleProof.depth`).
+    pub merkle_depth: u8,
+    /// Number of leaf slots in that balanced tree (`2^merkle_depth`).
+    pub tree_leaf_capacity: usize,
+    /// Number of leaves opened in the batch (one per query index after `fold_positions`).
+    pub num_opened_leaves: usize,
+    /// Number of digest slots stored above the leaf layer in the batch proof (sum of
+    /// `BatchMerkleProof.nodes[i].len()`).
+    pub batch_internal_digest_cells: usize,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FriProofLayer {
     values: Vec<u8>,
@@ -275,6 +296,58 @@ impl FriProofLayer {
     pub fn size(&self) -> usize {
         // +4 for length of values, +4 for length of paths
         self.values.len() + 4 + self.paths.len() + 4
+    }
+
+    /// Parses the embedded [`BatchMerkleProof`] and value layout to return opening statistics for
+    /// this layer.
+    ///
+    /// # Errors
+    /// Returns an error if value bytes do not divide into whole queries, if the batch proof cannot
+    /// be deserialized, or if `2^depth` does not fit in `usize`.
+    pub fn merkle_opening_stats<E: FieldElement, H: Hasher>(
+        &self,
+        folding_factor: usize,
+    ) -> Result<FriLayerMerkleOpeningStats, DeserializationError> {
+        let num_query_bytes = E::ELEMENT_BYTES
+            .checked_mul(folding_factor)
+            .ok_or_else(|| DeserializationError::InvalidValue("folding factor overflow".into()))?;
+        if num_query_bytes == 0 {
+            return Err(DeserializationError::InvalidValue(
+                "folding factor must be positive".into(),
+            ));
+        }
+        if !self.values.len().is_multiple_of(num_query_bytes) {
+            return Err(DeserializationError::InvalidValue(format!(
+                "number of value bytes ({}) does not divide into whole number of queries",
+                self.values.len(),
+            )));
+        }
+        let num_opened_leaves = self.values.len() / num_query_bytes;
+        if num_opened_leaves == 0 {
+            return Err(DeserializationError::InvalidValue(
+                "a FRI layer must contain at least one queried evaluation".into(),
+            ));
+        }
+
+        let mut reader = SliceReader::new(&self.paths);
+        let batch = BatchMerkleProof::<H>::read_from(&mut reader)?;
+        if reader.has_more_bytes() {
+            return Err(DeserializationError::UnconsumedBytes);
+        }
+
+        let depth = batch.depth;
+        let tree_leaf_capacity = 1usize
+            .checked_shl(u32::from(depth))
+            .ok_or_else(|| DeserializationError::InvalidValue("merkle depth overflow".into()))?;
+        let batch_internal_digest_cells =
+            batch.nodes.iter().map(|row| row.len()).sum::<usize>();
+
+        Ok(FriLayerMerkleOpeningStats {
+            merkle_depth: depth,
+            tree_leaf_capacity,
+            num_opened_leaves,
+            batch_internal_digest_cells,
+        })
     }
 
     // PARSING
